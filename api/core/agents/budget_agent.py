@@ -26,6 +26,19 @@ class BudgetAgent(BaseAgent):
     - Do not mention 'JSON' or the 'provided summary'. Connect directly with the user (e.g., "Your food spending seems...").
     """
 
+    def generate_local_fallback(self, prompt: str, schema: Optional[Type[BudgetAdviceSchema]] = None) -> Optional[BudgetAdviceSchema]:
+        """
+        Local fallback when Gemini is unavailable.
+        """
+        return BudgetAdviceSchema(
+            insights=[
+                "Configure your GEMINI_API_KEY for advanced AI analysis.",
+                "Your transactions are safely stored locally and in the cloud.",
+                "Real-time budget insights will appear here once AI is active."
+            ],
+            overall_sentiment="Good"
+        )
+
     def generate_advice(self, summary_data: Dict) -> Optional[BudgetAdviceSchema]:
         """
         Generates budget insights based on summary metrics.

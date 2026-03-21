@@ -9,48 +9,81 @@
 
 from __future__ import annotations
 
+# Standard imports
 import importlib
 import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
-
 import numpy as np
-import torch
-import torch.nn.functional as F
-from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
-from torch.utils.data import Dataset
-from transformers import (
-    AutoModelForSequenceClassification,
-    AutoTokenizer,
-    DataCollatorWithPadding,
-    Trainer,
-    TrainingArguments,
-)
+
+# Heavy imports (lazy loaded to prevent startup hangs)
+# These will be initialized within the _lazy_import_ml() function
+torch = None
+F = None
+transformers = None
+Dataset = None
+AutoModelForSequenceClassification = None
+AutoTokenizer = None
+DataCollatorWithPadding = None
+Trainer = None
+TrainingArguments = None
+
+# Heavy imports (lazy loaded to prevent startup hangs)
+torch = None
+F = None
+transformers = None
+Dataset = None
+AutoModelForSequenceClassification = None
+AutoTokenizer = None
+DataCollatorWithPadding = None
+Trainer = None
+TrainingArguments = None
+_TextClassificationDataset = None
+
+def _lazy_import_ml():
+    global torch, F, transformers, Dataset, AutoModelForSequenceClassification
+    global AutoTokenizer, DataCollatorWithPadding, Trainer, TrainingArguments
+    global _TextClassificationDataset
+    
+    if torch is None:
+        try:
+            print("[INFO] [Classifier] Lazy loading heavy ML libraries (torch, transformers)...")
+            import torch as _torch
+            import torch.nn.functional as _F
+            import transformers as _transformers
+            from torch.utils.data import Dataset as _Dataset
+            
+            torch = _torch
+            F = _F
+            transformers = _transformers
+            Dataset = _Dataset
+            
+            AutoModelForSequenceClassification = _transformers.AutoModelForSequenceClassification
+            AutoTokenizer = _transformers.AutoTokenizer
+            DataCollatorWithPadding = _transformers.DataCollatorWithPadding
+            Trainer = _transformers.Trainer
+            TrainingArguments = _transformers.TrainingArguments
+
+            class _InternalDataset(_Dataset):
+                def __init__(self, texts, labels, tokenizer, max_length):
+                    self.texts = list(texts)
+                    self.labels = list(labels)
+                    self.tokenizer = tokenizer
+                    self.max_length = max_length
+                def __len__(self): return len(self.texts)
+                def __getitem__(self, idx):
+                    encoding = self.tokenizer(self.texts[idx], truncation=True, max_length=self.max_length)
+                    encoding["labels"] = self.labels[idx]
+                    return encoding
+            
+            _TextClassificationDataset = _InternalDataset
+            print("[OK] [Classifier] Heavy ML libraries loaded successfully.")
+        except Exception as e:
+            print(f"[WARN] [Classifier] Failed to load heavy ML libraries: {e}")
+            raise e
 
 from core.preprocessor import TransactionPreprocessor
 from core.rules import RuleEngine, RuleMatch
-
-
-class _TextClassificationDataset(Dataset):
-    """Minimal HF-friendly dataset for plain text + integer labels."""
-
-    def __init__(self, texts: Sequence[str], labels: Sequence[int], tokenizer, max_length: int):
-        self.texts = list(texts)
-        self.labels = list(labels)
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-
-    def __len__(self) -> int:
-        return len(self.texts)
-
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        encoding = self.tokenizer(
-            self.texts[idx],
-            truncation=True,
-            max_length=self.max_length,
-        )
-        encoding["labels"] = self.labels[idx]
-        return encoding
 
 
 class TransactionClassifier:
@@ -75,7 +108,9 @@ class TransactionClassifier:
         self.ml_threshold = ml_threshold
         self.embed_threshold = embed_threshold
         self.use_sentence_fallback = use_sentence_fallback
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Don't check for torch here to avoid hang
+        self.device = device or "cpu" 
         self.fallback_category = "Others"
 
         self.preprocessor = TransactionPreprocessor()
@@ -84,10 +119,11 @@ class TransactionClassifier:
         self.tokenizer = None
         self.model = None
         self.embedder = None
+        self.ml_disabled = False
         self.label2id: Dict[str, int] = {}
         self.id2label: Dict[int, str] = {}
         self.centroid_labels: List[str] = []
-        self.centroid_matrix: Optional[torch.Tensor] = None
+        self.centroid_matrix: Any = None
 
     # ------------------------------------------------------------------ #
     # Internal helpers
@@ -277,8 +313,17 @@ class TransactionClassifier:
         return self.fallback_category, max(ml_conf, embed_conf) * 0.9, "FALLBACK"
 
     def _assert_ready(self):
+        if self.ml_disabled:
+            return # It's "ready" in a reduced capacity
         if self.model is None or self.tokenizer is None:
-            raise RuntimeError("Model/tokenizer not loaded. Call train() or load() first.")
+            # Try once more to lazy load if not already attempted
+            try:
+                _lazy_import_ml()
+            except:
+                self.ml_disabled = True
+                return
+            if self.model is None:
+                raise RuntimeError("Model/tokenizer not loaded. Call train() or load() first.")
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -298,6 +343,7 @@ class TransactionClassifier:
         max_length: Optional[int] = None,
         use_fp16: Optional[bool] = None,
     ):
+        _lazy_import_ml()
         texts = list(texts)
         labels = list(labels)
         if not texts:
@@ -365,10 +411,20 @@ class TransactionClassifier:
         raw_texts: Sequence[str],
         clean_texts: Optional[Sequence[Optional[str]]] = None,
     ) -> List[Tuple[str, float, Dict[str, Any]]]:
-        self._assert_ready()
-
         if not raw_texts:
             return []
+            
+        # Try to load ML if not already attempted/failed
+        if not self.ml_disabled and (self.model is None or self.tokenizer is None):
+            try:
+                _lazy_import_ml()
+                # Update device once torch is loaded
+                if self.device == "cpu" and torch.cuda.is_available():
+                    self.device = "cuda"
+            except Exception:
+                self.ml_disabled = True
+                print("⚠️ [Classifier] ML functionality is disabled due to missing libraries or loading errors.")
+
         raw_texts = list(raw_texts)
         if clean_texts is not None and len(clean_texts) != len(raw_texts):
             raise ValueError("clean_texts must match raw_texts length.")
@@ -401,7 +457,7 @@ class TransactionClassifier:
             else:
                 pending_indices.append(idx)
 
-        if pending_indices:
+        if pending_indices and not self.ml_disabled and self.model is not None:
             pending_clean = [clean_texts[i] for i in pending_indices]
             ml_cats, ml_conf, ml_probs = self._predict_transformer(pending_clean)
             low_conf_indices: List[int] = []
@@ -461,6 +517,9 @@ class TransactionClassifier:
                             else None,
                         },
                     )
+        elif pending_indices:
+            # ML is disabled or model failed to load, just use rule engine results or fallback
+            print("ℹ️ [Classifier] ML is disabled/unavailable. Falling back to rules or generic category.")
 
         for idx, result in enumerate(outputs):
             if result is None:
@@ -519,11 +578,19 @@ class TransactionClassifier:
     def load(self, dir_path: str = "models", name: str = "classifier"):
         path = Path(dir_path) / name
         if not path.exists():
-            raise FileNotFoundError(f"Saved model not found at {path}")
+            print(f"⚠️ [Classifier] Model path {path} not found. ML classification will be disabled.")
+            self.ml_disabled = True
+            return
 
-        self.tokenizer = AutoTokenizer.from_pretrained(path)
-        self.model = AutoModelForSequenceClassification.from_pretrained(path).to(self.device)
-        self.model.eval()
+        try:
+            _lazy_import_ml()
+            self.tokenizer = AutoTokenizer.from_pretrained(path)
+            self.model = AutoModelForSequenceClassification.from_pretrained(path).to(self.device)
+            self.model.eval()
+        except Exception as e:
+            print(f"⚠️ [Classifier] Failed to load ML model from {path}: {e}")
+            self.ml_disabled = True
+            return
 
         meta_path = path / "metadata.json"
         if not meta_path.exists():

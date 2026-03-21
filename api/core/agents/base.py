@@ -27,13 +27,21 @@ class BaseAgent:
     """
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY")
-        if not self.api_key:
+        
+        # Detect placeholder or empty keys
+        is_placeholder = not self.api_key or "your_actual" in self.api_key or self.api_key.strip() == ""
+        
+        if is_placeholder:
             self.client = None
         else:
-            self.client = genai.Client(api_key=self.api_key)
+            try:
+                self.client = genai.Client(api_key=self.api_key)
+            except Exception as e:
+                print(f"[BaseAgent] Failed to initialize Google GenAI client: {e}")
+                self.client = None
         
         # Default model, can be overridden by subclasses
-        self.default_model = "gemini-2.5-flash"
+        self.default_model = "gemini-2.0-flash"
         
         # Local AI Brain for fallbacks
         from ..local_brain import local_brain

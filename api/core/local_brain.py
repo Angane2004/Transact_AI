@@ -1,7 +1,17 @@
 import os
 import numpy as np
-import onnxruntime as ort
-from transformers import AutoTokenizer
+
+# Lazy loaded
+ort = None
+AutoTokenizer = None
+
+def _lazy_import_local():
+    global ort, AutoTokenizer
+    if ort is None:
+        import onnxruntime as _ort
+        from transformers import AutoTokenizer as _AutoTokenizer
+        ort = _ort
+        AutoTokenizer = _AutoTokenizer
 
 class LocalBrain:
     _instance = None
@@ -21,16 +31,17 @@ class LocalBrain:
         self.tokenizer = None
         self.session = None
         self._initialized = True
-        
-        if os.path.exists(self.onnx_path):
-            self.load_model()
 
     def is_ready(self) -> bool:
+        # Try to load if not ready
+        if self.session is None and os.path.exists(self.onnx_path):
+            self.load_model()
         return self.session is not None and self.tokenizer is not None
 
     def load_model(self):
         try:
             print(f"Loading Local AI Model from {self.onnx_path}...")
+            _lazy_import_local()
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_dir)
             self.session = ort.InferenceSession(self.onnx_path)
             print("Local AI Model loaded successfully.")
