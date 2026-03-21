@@ -43,7 +43,7 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
 
   const handleConfirm = async () => {
     const session = authService.getSession();
-    const userId = session?.phone.replace(/\+/g, '');
+    const userId = session?.phone.replace(/\+/g, '').trim();
 
     setLoading(true);
     try {

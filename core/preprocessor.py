@@ -87,56 +87,58 @@ def cleanup_merchant(name: str) -> str:
 def extract_recipient(text: str) -> str:
     """
     Extract recipient or merchant name reliably.
-    Handles phone numbers, UPI IDs, and merchant names.
+    Handles phone numbers, UPI IDs, and merchant names with improved cleaning.
     """
     t = text.lower().strip()
 
-    # ---------------------------
-    # 1. Merchant name extraction
-    # ---------------------------
-    merchant_patterns = [
-        r"paid to (.+?)(?: using| via| with|$)",
-        r"paid at (.+?)(?: using| via| with|$)",
-        r"sent to (.+?)(?: using| via| with|$)",
-        r"received from (.+?)(?: using| via| with|$)",
-        r"credited from (.+?)(?: using| via| with|$)",
+    # 1. Merchant name extraction patterns (Heuristic-based)
+    # Order matters: more specific patterns first
+    patterns = [
+        r'to\s+([a-z\s0-9\.&]{2,30})',
+        r'at\s+([a-z\s0-9\.&]{2,30})',
+        r'towards\s+([a-z\s0-9\.&]{2,30})',
+        r'by\s+([a-z\s0-9\.&]{2,30})',
+        r'paid to\s+([a-z\s0-9\.&]{2,30})',
+        r'sent to\s+([a-z\s0-9\.&]{2,30})',
+        r'received from\s+([a-z\s0-9\.&]{2,30})',
     ]
 
-    for pat in merchant_patterns:
-        m = re.search(pat, t)
-        if m:
-            raw = m.group(1).strip()
-
-            # Remove trailing common words
-            remove_words = [
-                "google pay",
-                "gpay",
-                "phonepe",
-                "paytm",
-                "upi",
-                "transaction",
-                "ref",
-                "refno",
-                "using",
-                "via"
+    merchant = "Unknown"
+    for p in patterns:
+        m_match = re.search(p, t)
+        if m_match:
+            candidate = m_match.group(1).strip()
+            # Skip if it looks like a date or account number
+            if re.match(r'^\d', candidate):
+                continue
+                
+            # Clean up: stop at first occurrence of common "filler" words
+            stop_words = [
+                'on', 'at', 'from', 'via', 'towards', 'using', 'successful', 
+                'for', 'a/c', 'account', 'ref', 'available', 'avbl', 'bal', 
+                'is', 'has', 'in', 'using', 'google', 'pay', 'gpay', 'upi',
+                'phonepe', 'paytm', 'transaction', 'refno'
             ]
-            for w in remove_words:
-                raw = raw.replace(w, "").strip()
+            
+            words = candidate.split()
+            final_words = []
+            for w in words:
+                clean_w = w.rstrip('.,')
+                if clean_w in stop_words:
+                    break
+                final_words.append(w)
+            
+            if final_words:
+                merchant = " ".join(final_words).rstrip('.,')
+                if merchant:
+                    return merchant.title()
 
-            # Keep only first 2 words for merchant names
-            cleaned = " ".join(raw.split()[:2]).strip()
-            return cleaned if cleaned else raw
-
-    # ---------------------------
-    # 2. Phone number (only if no merchant found)
-    # ---------------------------
+    # 2. Phone number 
     phone = re.search(r"\b\d{10}\b", t)
     if phone:
         return phone.group(0)
 
-    # ---------------------------
-    # 3. UPI ID (very last)
-    # ---------------------------
+    # 3. UPI ID 
     upi = re.search(r"\b[\w\.-]+@[\w]+\b", t)
     if upi:
         return upi.group(0)

@@ -107,6 +107,9 @@ export default function DashboardPage() {
             // Try to sync pending first if we are back online
             const didSync = await syncPendingTransactions(userId);
             
+            // Wait 300ms to ensure any recent saves are committed/indexed
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
             const [summaryRes, transRes] = await Promise.all([
                 api.get('/summary'),
                 api.get('/transactions', { params: { limit: 10 } })

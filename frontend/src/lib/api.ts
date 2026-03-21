@@ -14,7 +14,7 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
     try {
         // Access localStorage directly since this runs in the browser
-        const sessionStr = typeof window !== 'undefined' ? localStorage.getItem('transactai_session') : null;
+        const sessionStr = typeof window !== 'undefined' ? localStorage.getItem('transactai_auth_session') : null;
         if (sessionStr) {
             const session = JSON.parse(sessionStr);
             const userId = session.phone?.replace(/\+/g, '').trim();

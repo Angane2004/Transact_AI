@@ -14,7 +14,7 @@ export default function LoadingPage() {
     useEffect(() => {
         // Initialize data on first load for current user
         const session = authService.getSession();
-        const userId = session?.phone.replace(/\+/g, '');
+        const userId = session?.phone.replace(/\+/g, '').trim();
         initializeData(userId);
 
         const timer = setInterval(() => {
@@ -39,7 +39,7 @@ export default function LoadingPage() {
             const timeout = setTimeout(() => {
                 // Check if profile is complete
                 const session = authService.getSession();
-                const userId = session?.phone.replace(/\+/g, '');
+                const userId = session?.phone.replace(/\+/g, '').trim();
                 const profile = userService.getProfile(userId);
                 
                 if (!profile || !profile.fullName) {

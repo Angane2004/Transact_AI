@@ -144,8 +144,10 @@ from fastapi import Header
 
 def get_current_user_id(x_user_id: Optional[str] = Header(None)):
     """Simple header-based user identification for production demonstration."""
-    # print(f"DEBUG: Received X-User-Id: {x_user_id}")
-    return x_user_id or "default_user"
+    if not x_user_id:
+        return "default_user"
+    # Normalize ID to match frontend (no + symbol, trimmed)
+    return x_user_id.replace("+", "").strip()
 
 # ============================================================
 # Root

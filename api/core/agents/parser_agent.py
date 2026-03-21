@@ -29,60 +29,101 @@ class ParserAgent(BaseAgent):
     If a certain piece of information is missing from the text, return null for that field.
     """
 
+    def is_enabled(self) -> bool:
+        # ParserAgent is always enabled because it has a regex-based fallback
+        # that doesn't even require the local onnx model.
+        return True
+
     def generate_local_fallback(self, prompt: str, schema: Optional[Type[T]] = None) -> Optional[T]:
         """
         Expert regex-based fallback for Indian banking SMS.
         """
-        text = prompt.lower()
-        
-        # 1. Amount Extraction (e.g. Rs. 500, INR 1,200.50, ₹ 100)
-        amount = None
-        amt_match = re.search(r'(?:rs|inr|₹)\.?\s?([\d,]+\.?\d*)', text)
-        if amt_match:
-            amount = float(amt_match.group(1).replace(',', ''))
-
-        # 2. Transaction Type
-        tx_type = "debit"
-        if "credited" in text or "received" in text or "deposited" in text:
-            tx_type = "credit"
-        elif "debited" in text or "spent" in text or "paid" in text:
+        try:
+            text = prompt.lower()
+            
+            # 1. Amount Extraction (e.g. Rs. 500, INR 1,200.50, ₹ 100)
+            amount = None
+            amt_match = re.search(r'(?:rs|inr|₹)\.?\s?([\d,]+\.?\d*)', text)
+            if amt_match:
+                try:
+                    amount = float(amt_match.group(1).replace(',', ''))
+                except ValueError:
+                    amount = None
+    
+            # 2. Transaction Type
             tx_type = "debit"
-
-        # 3. Last 4 Digits
-        last4 = None
-        last4_match = re.search(r'(?:a/c|acct|card|xx)(?:\s|no)?(\d{4})', text)
-        if last4_match:
-            last4 = last4_match.group(1)
-
-        # 4. UPI Details
-        upi_ref = None
-        ref_match = re.search(r'(?:upi|ref|ref\sno)\.?\s?(\d{12})', text)
-        if ref_match:
-            upi_ref = ref_match.group(1)
-
-        # 5. Merchant extraction (Heuristic-based)
-        merchant = "Unknown"
-        if "to" in text:
-            m_match = re.search(r'to\s+([a-z\s0-9]{3,20})(?=\s|on|at|\.\s|$)', text)
-            if m_match: merchant = m_match.group(1).strip()
-        elif "at" in text:
-            m_match = re.search(r'at\s+([a-z\s0-9]{3,20})(?=\s|on|at|\.\s|$)', text)
-            if m_match: merchant = m_match.group(1).strip()
-        
-        # 6. Basic Date Extraction
-        date_match = re.search(r'(\d{2}-[a-z]{3}-\d{2,4})', text)
-        date_str = date_match.group(1) if date_match else None
-
-        result = ParsedTransactionSchema(
-            amount=amount,
-            type=tx_type,
-            account_last4=last4,
-            merchant=merchant.title() if merchant else "Unknown",
-            upi_ref=upi_ref,
-            date=date_str
-        )
-        
-        return result
+            if "credited" in text or "received" in text or "deposited" in text:
+                tx_type = "credit"
+            elif "debited" in text or "spent" in text or "paid" in text:
+                tx_type = "debit"
+    
+            # 3. Last 4 Digits
+            last4 = None
+            last4_match = re.search(r'(?:a/c|acct|card|xx)(?:\s|no)?(\d{4})', text)
+            if last4_match:
+                last4 = last4_match.group(1)
+    
+            # 4. UPI Details
+            upi_id = None
+            upi_ref = None
+            ref_match = re.search(r'(?:upi|ref|ref\sno)\.?\s?(\d{12})', text)
+            if ref_match:
+                upi_ref = ref_match.group(1)
+            
+            # 5. Merchant extraction (Heuristic-based)
+            merchant = "Unknown"
+            # Try different patterns, prioritize "to", "at", "towards", "by"
+            patterns = [
+                r'to\s+([a-z\s0-9\.&]{2,30})',
+                r'at\s+([a-z\s0-9\.&]{2,30})',
+                r'towards\s+([a-z\s0-9\.&]{2,30})',
+                r'by\s+([a-z\s0-9\.&]{2,30})',
+            ]
+            
+            for p in patterns:
+                m_match = re.search(p, text)
+                if m_match:
+                    candidate = m_match.group(1).strip()
+                    # If it starts with a number (like a date or account), it's probably not the merchant
+                    if re.match(r'^\d', candidate):
+                        continue
+                        
+                    # Clean up: stop at first occurrence of common "filler" words or sentence ends
+                    stop_words = ['on', 'at', 'from', 'via', 'towards', 'using', 'successful', 'for', 'a/c', 'account', 'ref', 'available', 'avbl', 'bal', 'is', 'has', 'in']
+                    
+                    # Split by space and look for stop words
+                    words = candidate.split()
+                    final_words = []
+                    for w in words:
+                        # Strip trailing periods/commas for check
+                        clean_w = w.rstrip('.,')
+                        if clean_w in stop_words:
+                            break
+                        final_words.append(w)
+                    
+                    if final_words:
+                        merchant = " ".join(final_words).rstrip('.,')
+                        break
+    
+            # 6. Basic Date Extraction
+            date_match = re.search(r'(\d{2}-[a-z]{3}-\d{2,4})', text)
+            date_str = date_match.group(1) if date_match else None
+    
+            result = ParsedTransactionSchema(
+                amount=amount,
+                type=tx_type,
+                account_last4=last4,
+                merchant=merchant.title() if merchant != "Unknown" else "Unknown",
+                upi_ref=upi_ref,
+                upi_id=None,
+                date=date_str
+            )
+            
+            return result
+        except Exception as e:
+            print(f"[ParserAgent] Critical error in local fallback: {e}")
+            # Ensure we return at least a default schema instead of None to avoid 500
+            return ParsedTransactionSchema(merchant="Error in Parsing", type="debit")
 
     def parse(self, text: str) -> Optional[ParsedTransactionSchema]:
         """

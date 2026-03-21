@@ -101,8 +101,8 @@ class BaseAgent:
             return schema.model_validate_json(response.text)
             
         except Exception as e:
-            print(f"[{self.__class__.__name__}] Error generating structured output: {e}")
-            return None
+            print(f"[{self.__class__.__name__}] Gemini error (structured): {e}. Trying local fallback...")
+            return self.generate_local_fallback(prompt, schema)
 
     def generate_text(self, prompt: str, system_instruction: str = None) -> Optional[str]:
         """
@@ -132,5 +132,7 @@ class BaseAgent:
                 response = future.result(timeout=15) # 15 second internal timeout
             return response.text
         except Exception as e:
-            print(f"[{self.__class__.__name__}] Error generating text: {e}")
-            return None
+            print(f"[{self.__class__.__name__}] Gemini error (text): {e}. Trying local fallback...")
+            fallback_res = self.generate_local_fallback(prompt)
+            # Ensure we return a string, or None if the fallback truly has nothing
+            return str(fallback_res) if fallback_res else None
