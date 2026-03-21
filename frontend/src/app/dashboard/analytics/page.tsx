@@ -21,7 +21,7 @@ import {
     AreaChart,
     Area,
 } from "recharts";
-import { TrendingUp, TrendingDown, DollarSign, Calendar, Activity } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Calendar, Activity, IndianRupeeIcon } from "lucide-react";
 import { toast } from "sonner";
 import { firestoreService } from "@/lib/firestoreService";
 
@@ -300,7 +300,7 @@ export default function AnalyticsPage() {
                     <Card className="hover:shadow-lg transition-shadow">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
-                            <DollarSign className="h-4 w-4 text-muted-foreground" />
+                            <IndianRupeeIcon className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">₹{currentData.total_spent?.toFixed(2) || "0.00"}</div>
@@ -606,7 +606,7 @@ export default function AnalyticsPage() {
                                     </div>
                                 </div>
                                 <div className="flex items-start gap-3 p-4 rounded-lg bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border border-blue-200 dark:border-blue-800">
-                                    <DollarSign className="h-5 w-5 text-blue-500 mt-0.5" />
+                                    <IndianRupeeIcon className="h-5 w-5 text-blue-500 mt-0.5" />
                                     <div>
                                         <p className="font-medium">Average per Transaction</p>
                                         <p className="text-sm text-muted-foreground">

@@ -43,7 +43,7 @@ export default function TransactionsPage() {
             setLoading(true);
             
             // 1. Fetch Transactions from Firestore
-            const transRes = await firestoreService.getTransactions(userId, 100);
+            const transRes = await firestoreService.getTransactions(userId, 500);
             const newTransactions = transRes.success ? transRes.data : [];
             setTransactions(newTransactions);
 

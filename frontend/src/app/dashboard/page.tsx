@@ -11,14 +11,15 @@ import { DashboardCharts } from "@/components/DashboardCharts";
 import { PasteSmsDialog } from "@/components/PasteSmsDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { IndianRupee, CreditCard, Activity, TrendingUp, Sparkles, Lock, X, RefreshCw } from "lucide-react";
+import { IndianRupee, CreditCard, Activity, TrendingUp, Sparkles, Lock, X, RefreshCw, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { pinService } from "@/lib/localStorageService";
 import { useDensity } from "@/lib/DensityContext";
-import { TransactionCategorizeNotification } from "@/components/TransactionCategorizeNotification";
 import { firestoreService } from "@/lib/firestoreService";
+import { useSmsListener } from "@/hooks/useSmsListener";
+import { TransactionCategorizeNotification } from "@/components/TransactionCategorizeNotification";
 
 const container = {
     hidden: { opacity: 0 },
@@ -177,6 +178,9 @@ export default function DashboardPage() {
         fetchData();
     }, [fetchData]);
 
+    // Activate Real-time SMS Listener (Native Only)
+    useSmsListener(fetchData);
+
     const handleCategoryAdded = useCallback(() => {
         fetchData();
     }, [fetchData]);
@@ -298,14 +302,18 @@ export default function DashboardPage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="flex flex-col md:flex-row md:items-center md:justify-between gap-4"
             >
-                <div>
-                    <h2 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                        Dashboard
-                    </h2>
+                    <div className="flex items-center gap-2">
+                        <h2 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                            Dashboard
+                        </h2>
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-[10px] font-bold text-green-600 dark:text-green-400 animate-pulse">
+                            <Zap className="h-2.5 w-2.5" />
+                            REAL-TIME LINK ACTIVE
+                        </div>
+                    </div>
                     <p className="text-muted-foreground mt-1">
                         Welcome back! Here's your financial overview
                     </p>
-                </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <Button 
                         variant="outline" 

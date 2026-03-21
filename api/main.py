@@ -137,6 +137,10 @@ class FeedbackModel(BaseModel):
     corrected: str
     confidence: float
 
+class WebhookRequest(BaseModel):
+    message: str
+    sender: Optional[str] = "Unknown"
+
 # ============================================================
 # Auth Helper
 # ============================================================
@@ -252,6 +256,21 @@ def classify(payload: Dict, db: Session = Depends(get_db), user_id: str = Depend
         "ai_suggestions": ai_suggestions,
         "category": cat
     }
+
+# ============================================================
+# Webhook (External Automation)
+# ============================================================
+@app.post("/webhook/sms")
+def webhook_sms(
+    request: WebhookRequest, 
+    db: Session = Depends(get_db), 
+    user_id: str = Depends(get_current_user_id)
+):
+    """
+    Automated endpoint for Tasker/MacroDroid.
+    Reuse the classify logic to save and parse.
+    """
+    return classify({"message": request.message}, db, user_id)
 
 # ============================================================
 # Manual Category Selection
