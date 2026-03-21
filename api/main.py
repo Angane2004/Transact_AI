@@ -23,7 +23,7 @@ from api.core.agents import ParserAgent, ConfidenceAgent, AnomalyAgent, ChatAgen
 # Load environment variables explicitly from current directory
 env_path = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path=env_path)
-print(f"🚀 Loading environment from: {env_path}")
+print(f"Loading environment from: {env_path}")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -66,9 +66,9 @@ def init_db():
     """Create database tables if they don't exist"""
     try:
         Base.metadata.create_all(bind=engine)
-        print("✅ Database tables initialized")
+        print("Database tables initialized")
     except Exception as e:
-        print(f"⚠️ Database initialization warning: {e}")
+        print(f"Database initialization warning: {e}")
 
 # ============================================================
 # Load ML Model
@@ -77,7 +77,7 @@ processor = TransactionPreprocessor()
 
 # Initialize classifier and attach to app.state for global reload access
 if os.getenv("SKIP_ML_LOAD") == "true":
-    print("⏭️  Skipping ML Model loading as per environment variable")
+    print("Skipping ML Model loading as per environment variable")
     app.state.classifier = None
 else:
     try:
@@ -85,10 +85,10 @@ else:
         initial_classifier = TransactionClassifier()
         initial_classifier.load(dir_path="models", name="classifier")
         app.state.classifier = initial_classifier
-        print("✅ ML Model loaded successfully")
+        print("ML Model loaded successfully")
     except Exception as e:
-        print(f"⚠️ ML Model loading warning: {e}")
-        print("⚠️ Running without ML model - some features may be limited")
+        print("ML Model loading warning: {e}")
+        print("Running without ML model - some features may be limited")
         app.state.classifier = None
 
 # Initialize AI Agents
@@ -306,7 +306,7 @@ def manual_category(request: ManualCategoryRequest, db: Session = Depends(get_db
         db.commit()
     except Exception as e:
         db.rollback()
-        print(f"❌ Feedback Insert Error: {e}")
+        print(f"Feedback Insert Error: {e}")
         raise HTTPException(status_code=500, detail="Failed to save feedback")
 
     return {"status": "saved_with_feedback", "category": request.category}
@@ -386,7 +386,7 @@ def classify(request: ParseSmsRequest, db: Session = Depends(get_db), user_id: s
         db.refresh(new_txn)
     except Exception as e:
         db.rollback()
-        print(f"❌ Error saving pasted transaction: {e}")
+        print(f"Error saving pasted transaction: {e}")
         raise HTTPException(status_code=500, detail="Failed to save transaction to database")
 
     return {
@@ -584,7 +584,7 @@ def feedback(data: FeedbackModel, db: Session = Depends(get_db)):
         )
         db.add(feedback_row)
         db.commit()
-        return {"status": "success", "message": "feedback stored ✔"}
+        return {"status": "success", "message": "feedback stored"}
     except Exception as e:
         db.rollback()
         traceback.print_exc()
