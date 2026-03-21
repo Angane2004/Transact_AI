@@ -1,7 +1,7 @@
 # api/core/agents/budget_agent.py
 
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Type
 from .base import BaseAgent
 import json
 

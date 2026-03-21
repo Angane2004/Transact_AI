@@ -1,7 +1,7 @@
 # api/core/agents/chat_agent.py
 
 from .base import BaseAgent
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Type
 from pydantic import BaseModel
 import json
 
