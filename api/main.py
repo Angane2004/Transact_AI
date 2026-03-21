@@ -16,11 +16,8 @@ from api.models import Transaction, Feedback
 from api.insights import router as insights_router
 from api.budget import router as budget_router
 
-# Import ML components
+# ML components will be imported conditionally
 from core.preprocessor import TransactionPreprocessor, clean_text_for_model, extract_amount, extract_recipient
-from core.model import TransactionClassifier
-from training.train_model import train_with_feedback
-from api.scheduler import run_nightly_retrain
 from api.core.agents import ParserAgent, ConfidenceAgent, AnomalyAgent, ChatAgent, BudgetAgent
 
 # Load environment variables explicitly from current directory
@@ -84,6 +81,7 @@ if os.getenv("SKIP_ML_LOAD") == "true":
     app.state.classifier = None
 else:
     try:
+        from core.model import TransactionClassifier
         initial_classifier = TransactionClassifier()
         initial_classifier.load(dir_path="models", name="classifier")
         app.state.classifier = initial_classifier
@@ -564,6 +562,7 @@ def retrain_model(background_tasks: BackgroundTasks, db: Session = Depends(get_d
         # Background worker: run training with feedback, then reload classifier
         def _worker(df):
             try:
+                from training.train_model import train_with_feedback
                 print("[RETRAIN] started background retraining with feedback rows:", len(df))
                 res = train_with_feedback(df)
                 print("[RETRAIN] finished training:", res)
