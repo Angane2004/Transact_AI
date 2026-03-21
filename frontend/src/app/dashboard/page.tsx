@@ -100,7 +100,7 @@ export default function DashboardPage() {
         return false;
     }, []);
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (force: boolean = false) => {
         const session = authService.getSession();
         const userId = session?.phone.replace(/\+/g, '').trim();
 
@@ -155,7 +155,10 @@ export default function DashboardPage() {
 
             // Sync Cache
             cacheService.saveSummary(newSummary, userId);
-            transactionService.saveMany(allFetchedTransactions, userId);
+            // We only save to local transaction cache if we are NOT forcing a cloud refresh
+            if (!force) {
+                transactionService.saveMany(allFetchedTransactions, userId);
+            }
 
         } catch (error: any) {
             console.error("Connectivity issue or empty account:", error);
@@ -182,7 +185,14 @@ export default function DashboardPage() {
     useSmsListener(fetchData);
 
     const handleCategoryAdded = useCallback(() => {
-        fetchData();
+        fetchData(true);
+    }, [fetchData]);
+
+    const handleTransactionAdded = useCallback(() => {
+        // Small delay to allow Firestore to propagate the write before we fetch
+        setTimeout(() => {
+            fetchData(true);
+        }, 800);
     }, [fetchData]);
 
     const handleCategorized = async (category: string) => {
@@ -287,7 +297,7 @@ export default function DashboardPage() {
                      </div>
 
                      <div className="flex flex-wrap justify-center gap-3">
-                        <div data-sms-trigger><PasteSmsDialog onTransactionAdded={fetchData} /></div>
+                        <div data-sms-trigger><PasteSmsDialog onTransactionAdded={handleTransactionAdded} /></div>
                         <div data-cat-trigger><AddCategoryDialog onCategoryAdded={handleCategoryAdded} /></div>
                      </div>
                 </div>
@@ -324,7 +334,7 @@ export default function DashboardPage() {
                     >
                         <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                     </Button>
-                    <PasteSmsDialog onTransactionAdded={fetchData} />
+                    <PasteSmsDialog onTransactionAdded={handleTransactionAdded} />
                     <AddCategoryDialog onCategoryAdded={handleCategoryAdded} />
                     <Link href="/dashboard/transactions">
                         <Button variant="outline" className="shadow-sm">
