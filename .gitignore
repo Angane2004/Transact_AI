@@ -1,0 +1,23 @@
+venv/
+.env
+__pycache__/
+*.pyc
+venv/
+.env
+__pycache__/
+*.pyc
+.vscode/
+data/
+models/*.ckpt
+models/*.bin
+models/*.pt
+
+# Ignore mobile folders
+tracAT-Mobile/
+frontend/TracAI-Mobile/
+frontend/TracAIMobileResponsive/
+
+# Large models and local DB
+*.db
+*.onnx
+*.onnx.data
