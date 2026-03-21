@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { transactionService, categoryService, authService, downloadService, DownloadRecord, cacheService } from "@/lib/localStorageService";
 import { api, endpoints } from "@/lib/api";
+import { firestoreService } from "@/lib/firestoreService";
 import { Download, FileText, FileSpreadsheet, FileJson, Filter, Search, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,39 +37,34 @@ export default function TransactionsPage() {
         const session = authService.getSession();
         const userId = session?.phone.replace(/\+/g, '').trim();
 
+        if (!userId) return;
+
         try {
             setLoading(true);
-            const [transRes, summaryRes] = await Promise.all([
-                api.get(endpoints.getTransactions, { params: { limit: 100 } }),
-                api.get(endpoints.getSummary)
-            ]);
             
-            const newTransactions = transRes.data.results;
-            const newSummary = summaryRes.data;
-
+            // 1. Fetch Transactions from Firestore
+            const transRes = await firestoreService.getTransactions(userId, 100);
+            const newTransactions = transRes.success ? transRes.data : [];
             setTransactions(newTransactions);
-            setCategories(Object.keys(newSummary.category_summary || {}));
 
-            // Update Cache
-            if (userId) {
-                transactionService.saveMany(newTransactions, userId);
-                cacheService.saveSummary(newSummary, userId);
-            }
+            // 2. Fetch Categories from Firestore
+            const catRes = await firestoreService.getCategories(userId);
+            const fetchedCategories = catRes.success ? catRes.data : [];
+            setCategories(fetchedCategories);
+
+            // Update local cache for safety (optional)
+            transactionService.saveMany(newTransactions, userId);
+            
         } catch (error) {
             console.error("Failed to load transactions:", error);
             
             // Fallback to Cache
             const cachedTransactions = transactionService.getAll(userId);
-            const cachedSummary = cacheService.getSummary(userId);
-
             if (cachedTransactions.length > 0) {
                 setTransactions(cachedTransactions);
-                if (cachedSummary) {
-                    setCategories(Object.keys(cachedSummary.category_summary || {}));
-                }
                 toast.info("Showing cached transactions (offline)");
             } else {
-                toast.error("Failed to sync with cloud. No local data found.");
+                toast.error("Failed to load transactions.");
             }
         } finally {
             setLoading(false);

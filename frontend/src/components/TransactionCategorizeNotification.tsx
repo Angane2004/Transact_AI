@@ -6,7 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Plus, X, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { categoryService, authService } from "@/lib/localStorageService";
+import { authService } from "@/lib/localStorageService";
+import { firestoreService } from "@/lib/firestoreService";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface TransactionCategorizeNotificationProps {
@@ -36,37 +37,45 @@ export function TransactionCategorizeNotification({
     useEffect(() => {
         if (open) {
             const session = authService.getSession();
-            const userId = session?.phone.replace(/\+/g, '');
-            const allCategories = categoryService.getNames(userId);
-            setCategories(allCategories);
+            const userId = session?.phone.replace(/\+/g, '').trim();
+            if (userId) {
+                firestoreService.getCategories(userId).then((res: any) => {
+                    if (res.success) setCategories(res.data);
+                });
+            }
             setSelectedCategory("");
             setNewCategory("");
             setShowAddCategory(false);
         }
     }, [open]);
 
-    const handleAddCategory = () => {
+    const handleAddCategory = async () => {
         if (!newCategory.trim()) {
             toast.error("Please enter a category name");
             return;
         }
 
         const session = authService.getSession();
-        const userId = session?.phone.replace(/\+/g, '');
+        const userId = session?.phone.replace(/\+/g, '').trim();
         const categoryName = newCategory.trim();
-        const existing = categoryService.getNames(userId);
         
-        if (existing.find(c => c.toLowerCase() === categoryName.toLowerCase())) {
+        if (!userId) return;
+
+        if (categories.find(c => c.toLowerCase() === categoryName.toLowerCase())) {
             toast.error("Category already exists");
             return;
         }
 
-        categoryService.add(categoryName, userId);
-        setCategories([...categories, categoryName]);
-        setSelectedCategory(categoryName);
-        setNewCategory("");
-        setShowAddCategory(false);
-        toast.success(`Category "${categoryName}" added`);
+        const res = await firestoreService.saveCategory(userId, categoryName);
+        if (res.success) {
+            setCategories([...categories, categoryName]);
+            setSelectedCategory(categoryName);
+            setNewCategory("");
+            setShowAddCategory(false);
+            toast.success(`Category "${categoryName}" added to cloud`);
+        } else {
+            toast.error("Failed to save category to cloud");
+        }
     };
 
     const handleCategorize = () => {

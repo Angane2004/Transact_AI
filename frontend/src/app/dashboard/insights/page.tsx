@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { transactionService, authService } from "@/lib/localStorageService";
 import { api } from "@/lib/api";
+import { firestoreService } from "@/lib/firestoreService";
 
 export default function InsightsPage() {
   const [activeFeature, setActiveFeature] = useState<string | null>(null);
@@ -19,8 +20,11 @@ export default function InsightsPage() {
     async function fetchAiAdvice() {
       try {
         const session = authService.getSession();
-        const userId = session?.phone.replace(/\+/g, '');
-        const txns = transactionService.getAll(userId);
+        const userId = session?.phone.replace(/\+/g, '').trim();
+        if (!userId) return;
+
+        const resTx = await firestoreService.getTransactions(userId, 500);
+        const txns = resTx.success ? resTx.data : [];
 
         // Build a brief summary payload for the AI
         const categoryTotals: Record<string, number> = {};
@@ -30,7 +34,7 @@ export default function InsightsPage() {
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
 
-        txns.forEach(t => {
+        txns.forEach((t: any) => {
             const d = new Date(t.date);
             if (d.getMonth() === currentMonth && d.getFullYear() === currentYear && t.type !== 'credit') {
                 categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;

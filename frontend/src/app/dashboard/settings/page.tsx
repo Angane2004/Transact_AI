@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { pinService, authService, initializeData, biometricService } from "@/lib/localStorageService";
+import { firestoreService } from "@/lib/firestoreService";
 import { BiometricPrompt } from "@/components/BiometricPrompt";
 import {
   ArrowLeft,
@@ -54,6 +55,7 @@ export default function SettingsPage() {
   });
 
   const [isRefreshingData, setIsRefreshingData] = useState(false);
+  const [isRefreshingCloud, setIsRefreshingCloud] = useState(false);
   const [isClearingData, setIsClearingData] = useState(false);
 
   useEffect(() => {
@@ -91,6 +93,28 @@ export default function SettingsPage() {
     setExperience(next);
     if (typeof window !== "undefined") {
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
+    }
+  };
+
+  const handleRefreshCloudData = async () => {
+    try {
+      setIsRefreshingCloud(true);
+      const session = authService.getSession();
+      const userId = session?.phone.replace(/\+/g, "").trim();
+      if (!userId) return;
+
+      const res = await firestoreService.initializeData(userId);
+      if (res.success) {
+        toast.success("Cloud data initialized with demo transactions");
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        toast.error("Failed to initialize cloud data: " + res.error);
+      }
+    } catch (error) {
+      console.error("Error refreshing cloud data:", error);
+      toast.error("Failed to refresh cloud data");
+    } finally {
+      setIsRefreshingCloud(false);
     }
   };
 
@@ -515,10 +539,32 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
               <div className="space-y-2">
-                <Label className="text-sm">Simulation</Label>
+                <Label className="text-sm">Cloud Data (Firebase)</Label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Refresh the generated transactions TransactAI uses for analytics
-                  and charts.
+                  Populate your Firebase Firestore with demo categories and transactions.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-2 border-primary/50 hover:border-primary"
+                  onClick={handleRefreshCloudData}
+                  disabled={isRefreshingCloud}
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 text-primary ${
+                      isRefreshingCloud ? "animate-spin" : ""
+                    }`}
+                  />
+                  {isRefreshingCloud
+                    ? "Initializing cloud data..."
+                    : "Initialize Cloud Demo Data"}
+                </Button>
+              </div>
+
+              <div className="space-y-2 pt-3 border-t">
+                <Label className="text-sm">Local Simulation</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Refresh the generated transactions stored locally on this device.
                 </p>
                 <Button
                   variant="outline"
@@ -533,8 +579,8 @@ export default function SettingsPage() {
                     }`}
                   />
                   {isRefreshingData
-                    ? "Refreshing demo data..."
-                    : "Regenerate demo transactions"}
+                    ? "Refreshing local data..."
+                    : "Regenerate Local Transactions"}
                 </Button>
               </div>
 

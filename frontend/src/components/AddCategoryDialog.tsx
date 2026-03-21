@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Plus, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { categoryService, authService } from "@/lib/localStorageService";
+import { firestoreService } from "@/lib/firestoreService";
 import { motion, AnimatePresence } from "framer-motion";
 
 // AI Suggested Categories based on common spending patterns
@@ -48,12 +49,16 @@ export function AddCategoryDialog({ onCategoryAdded }: { onCategoryAdded?: () =>
         }
     }, [open, existingCategories.length]);
 
-    const fetchCategories = () => {
+    const fetchCategories = async () => {
         try {
             const session = authService.getSession();
-            const userId = session?.phone.replace(/\+/g, '');
-            const categories = categoryService.getNames(userId);
-            setExistingCategories(categories);
+            const userId = session?.phone.replace(/\+/g, '').trim();
+            if (!userId) return;
+            
+            const res = await firestoreService.getCategories(userId);
+            if (res.success) {
+                setExistingCategories(res.data);
+            }
         } catch (error) {
             console.error("Failed to fetch categories:", error);
         }
@@ -66,13 +71,19 @@ export function AddCategoryDialog({ onCategoryAdded }: { onCategoryAdded?: () =>
         setLoading(true);
         try {
             const session = authService.getSession();
-            const userId = session?.phone.replace(/\+/g, '');
+            const userId = session?.phone.replace(/\+/g, '').trim();
             const categoryName = category.trim();
-            const existing = categoryService.getNames(userId);
+            
+            if (!userId) {
+                toast.error("User not identified");
+                return;
+            }
+
+            const existing = existingCategories;
             if (existing.find(c => c.toLowerCase() === categoryName.toLowerCase())) {
                 toast.error("Category already exists");
             } else {
-                categoryService.add(categoryName, userId);
+                await firestoreService.saveCategory(userId, categoryName);
                 toast.success("Category added successfully");
                 setCategory("");
                 setOpen(false);
@@ -91,12 +102,18 @@ export function AddCategoryDialog({ onCategoryAdded }: { onCategoryAdded?: () =>
         setLoading(true);
         try {
             const session = authService.getSession();
-            const userId = session?.phone.replace(/\+/g, '');
-            const existing = categoryService.getNames(userId);
+            const userId = session?.phone.replace(/\+/g, '').trim();
+            
+            if (!userId) {
+                toast.error("User not identified");
+                return;
+            }
+
+            const existing = existingCategories;
             if (existing.find(c => c.toLowerCase() === suggestedCategory.toLowerCase())) {
                 toast.error("Category already exists");
             } else {
-                categoryService.add(suggestedCategory, userId);
+                await firestoreService.saveCategory(userId, suggestedCategory);
                 toast.success(`Category "${suggestedCategory}" added successfully`);
                 setCategory("");
                 setOpen(false);

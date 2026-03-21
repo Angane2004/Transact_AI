@@ -21,3 +21,6 @@ sqlalchemy
 requests
 python-dotenv
 regex
+google-genai
+google-generativeai
+pyyaml

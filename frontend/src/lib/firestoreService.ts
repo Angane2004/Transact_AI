@@ -24,6 +24,7 @@ const getFirestoreFunctions = () => {
             query: () => ({}),
             where: () => ({}),
             getDocs: async () => ({ docs: [] }),
+            deleteDoc: async () => ({ success: false }),
         };
     }
     const firestoreModule = require("firebase/firestore");
@@ -36,6 +37,7 @@ const getFirestoreFunctions = () => {
         query: firestoreModule.query,
         where: firestoreModule.where,
         getDocs: firestoreModule.getDocs,
+        deleteDoc: firestoreModule.deleteDoc,
         Timestamp: firestoreModule.Timestamp,
     };
 };
@@ -49,145 +51,76 @@ const {
     query: queryFn,
     where: whereFn,
     getDocs: getDocsFn,
+    deleteDoc: deleteDocFn,
     Timestamp
 } = getFirestoreFunctions();
 
-// User Profile Operations
 export const firestoreService = {
-    // Save user profile
+    // User Profile Operations
     async saveUserProfile(userId: string, profileData: any) {
-        if (isSimulationMode || !firestore) {
-            localStorage.setItem("user_profile", JSON.stringify(profileData));
-            return { success: true, source: "localStorage" };
-        }
+        if (isSimulationMode || !firestore) return { success: false };
         try {
             const userRef = docFn(firestore, "users", userId);
             await setDocFn(userRef, {
-                ...profileData,
-                createdAt: Timestamp.now(),
-                updatedAt: Timestamp.now(),
-            });
-            console.log("✅ Profile saved to Firestore");
+                profile: {
+                    ...profileData,
+                    updatedAt: Timestamp?.now() || new Date().toISOString(),
+                }
+            }, { merge: true });
             return { success: true };
         } catch (error) {
-            console.error("❌ Firestore save error:", error);
-            localStorage.setItem("user_profile", JSON.stringify(profileData));
+            console.error("❌ Firestore profile save error:", error);
             return { success: false, error };
         }
     },
 
-    // Get user profile
     async getUserProfile(userId: string) {
-        if (isSimulationMode || !firestore) {
-            const localData = localStorage.getItem("user_profile");
-            if (localData) {
-                return { success: true, data: JSON.parse(localData), source: "localStorage" };
-            }
-            return { success: false, error: "No profile found" };
-        }
+        if (isSimulationMode || !firestore) return { success: false, data: null };
         try {
             const userRef = docFn(firestore, "users", userId);
             const docSnap = await getDocFn(userRef);
-
             if (docSnap.exists()) {
-                console.log("✅ Profile loaded from Firestore");
-                return { success: true, data: docSnap.data() };
-            } else {
-                const localData = localStorage.getItem("user_profile");
-                if (localData) {
-                    return { success: true, data: JSON.parse(localData), source: "localStorage" };
-                }
-                return { success: false, error: "No profile found" };
+                const data = docSnap.data();
+                return { success: true, data: data.profile || null };
             }
+            return { success: true, data: null };
         } catch (error) {
-            console.error("❌ Firestore get error:", error);
-            const localData = localStorage.getItem("user_profile");
-            if (localData) {
-                return { success: true, data: JSON.parse(localData), source: "localStorage" };
-            }
+            console.error("❌ Firestore profile get error:", error);
             return { success: false, error };
         }
     },
 
-    // Update user profile
-    async updateUserProfile(userId: string, updates: any) {
-        if (isSimulationMode || !firestore) {
-            const localData = localStorage.getItem("user_profile");
-            if (localData) {
-                const profile = JSON.parse(localData);
-                localStorage.setItem("user_profile", JSON.stringify({ ...profile, ...updates }));
-                return { success: true };
-            }
-            return { success: false, error: "No profile found" };
-        }
+    // Biometrics Operations
+    async saveBiometrics(userId: string, config: any) {
+        if (isSimulationMode || !firestore) return { success: false };
         try {
             const userRef = docFn(firestore, "users", userId);
-            await updateDocFn(userRef, {
-                ...updates,
-                updatedAt: Timestamp.now(),
-            });
-            console.log("✅ Profile updated in Firestore");
+            await setDocFn(userRef, {
+                biometrics: {
+                    ...config,
+                    updatedAt: Timestamp?.now() || new Date().toISOString(),
+                }
+            }, { merge: true });
             return { success: true };
         } catch (error) {
-            console.error("❌ Firestore update error:", error);
+            console.error("❌ Firestore biometrics save error:", error);
             return { success: false, error };
         }
     },
 
-    // Save PIN
-    async savePIN(userId: string, pin: string) {
-        localStorage.setItem("app_pin", pin);
-        if (isSimulationMode || !firestore) {
-            return { success: true, source: "localStorage" };
-        }
+    async getBiometrics(userId: string) {
+        if (isSimulationMode || !firestore) return { success: false, data: null };
         try {
-            const pinRef = docFn(firestore, "pins", userId);
-            await setDocFn(pinRef, {
-                pin: pin, // In production, hash this!
-                createdAt: Timestamp.now(),
-            });
-            console.log("✅ PIN saved to Firestore");
-            return { success: true };
-        } catch (error) {
-            console.error("❌ Firestore PIN save error:", error);
-            return { success: false, error };
-        }
-    },
-
-    // Verify PIN
-    async verifyPIN(userId: string, pin: string) {
-        const localPin = localStorage.getItem("app_pin");
-        if (isSimulationMode || !firestore) {
-            return { success: true, isValid: localPin === pin, source: "localStorage" };
-        }
-        try {
-            const pinRef = docFn(firestore, "pins", userId);
-            const docSnap = await getDocFn(pinRef);
-
+            const userRef = docFn(firestore, "users", userId);
+            const docSnap = await getDocFn(userRef);
             if (docSnap.exists()) {
-                const storedPin = docSnap.data().pin;
-                return { success: true, isValid: storedPin === pin };
-            } else {
-                return { success: true, isValid: localPin === pin, source: "localStorage" };
+                const data = docSnap.data();
+                return { success: true, data: data.biometrics || null };
             }
+            return { success: true, data: null };
         } catch (error) {
-            console.error("❌ Firestore PIN verify error:", error);
-            return { success: true, isValid: localPin === pin, source: "localStorage" };
-        }
-    },
-
-    // Check if Firestore is available
-    async isFirestoreAvailable() {
-        if (isSimulationMode || !firestore) {
-            return false;
-        }
-        try {
-            const testRef = docFn(firestore, "_test", "connection");
-            await getDocFn(testRef);
-            return true;
-        } catch (error) {
-            console.warn("⚠️ Firestore not available, using localStorage fallback");
-            return false;
+            console.error("❌ Firestore biometrics get error:", error);
+            return { success: false, error };
         }
     },
 
@@ -198,8 +131,7 @@ export const firestoreService = {
             const transRef = docFn(firestore, "users", userId, "transactions", transaction.id);
             await setDocFn(transRef, {
                 ...transaction,
-                serverTimestamp: Timestamp.now(),
-                updatedAt: Timestamp.now(),
+                updatedAt: Timestamp?.now() || new Date().toISOString(),
             });
             return { success: true };
         } catch (error) {
@@ -227,6 +159,97 @@ export const firestoreService = {
         } catch (error) {
             console.error("❌ Firestore transactions get error:", error);
             return { success: false, error, data: [] };
+        }
+    },
+
+    async updateTransaction(userId: string, transactionId: string, updates: any) {
+        if (isSimulationMode || !firestore) return { success: false };
+        try {
+            const transRef = docFn(firestore, "users", userId, "transactions", transactionId);
+            await updateDocFn(transRef, {
+                ...updates,
+                updatedAt: Timestamp?.now() || new Date().toISOString(),
+            });
+            return { success: true };
+        } catch (error) {
+            console.error("❌ Firestore transaction update error:", error);
+            return { success: false, error };
+        }
+    },
+
+    async deleteTransaction(userId: string, transactionId: string) {
+        if (isSimulationMode || !firestore) return { success: false };
+        try {
+            const transRef = docFn(firestore, "users", userId, "transactions", transactionId);
+            await deleteDocFn(transRef);
+            return { success: true };
+        } catch (error) {
+            console.error("❌ Firestore transaction delete error:", error);
+            return { success: false, error };
+        }
+    },
+
+    // Category Operations
+    async saveCategory(userId: string, category: string) {
+        if (isSimulationMode || !firestore) return { success: false };
+        try {
+            const catRef = docFn(firestore, "users", userId, "categories", category);
+            await setDocFn(catRef, {
+                name: category,
+                createdAt: Timestamp?.now() || new Date().toISOString(),
+            });
+            return { success: true };
+        } catch (error) {
+            console.error("❌ Firestore category save error:", error);
+            return { success: false, error };
+        }
+    },
+
+    async getCategories(userId: string): Promise<{ success: boolean; data: string[]; error?: string }> {
+        if (isSimulationMode || !firestore) return { success: false, data: [], error: "Not initialized" };
+        try {
+            const firestoreModule = require("firebase/firestore");
+            const categoriesRef = collectionFn(firestore, "users", userId, "categories");
+            const q = firestoreModule.query(categoriesRef, firestoreModule.orderBy("createdAt", "desc"));
+            const querySnapshot = await getDocsFn(q);
+            const categories = querySnapshot.docs.map((doc: any) => doc.data().name);
+            return { success: true, data: categories };
+        } catch (error: any) {
+            console.error("❌ Firestore categories get error:", error);
+            return { success: false, data: [], error: error.message };
+        }
+    },
+
+    // Initialization
+    async initializeData(userId: string): Promise<{ success: boolean; error?: string }> {
+        if (isSimulationMode || !firestore) return { success: false, error: "Not initialized" };
+        try {
+            // Check categories
+            const catRes = await this.getCategories(userId);
+            if (catRes.success && catRes.data.length === 0) {
+                const defaultCategories = [
+                    'Food & Dining', 'Shopping', 'Transportation', 'Bills & Utilities',
+                    'Entertainment', 'Healthcare', 'Education', 'Travel', 'Groceries'
+                ];
+                for (const cat of defaultCategories) {
+                    await this.saveCategory(userId, cat);
+                }
+            }
+
+            // Check transactions
+            const transRes = await this.getTransactions(userId, 1);
+            if (transRes.success && transRes.data.length === 0) {
+                const { generateSimulatedTransactions } = await import('./localStorageService');
+                const simulated = generateSimulatedTransactions(20);
+                for (const txn of simulated) {
+                    await this.saveTransaction(userId, txn);
+                }
+            }
+
+            return { success: true };
+        } catch (error: any) {
+            console.error("❌ Firestore initialization error:", error);
+            return { success: false, error: error.message };
         }
     }
 };

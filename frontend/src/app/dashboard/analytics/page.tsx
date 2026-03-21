@@ -23,6 +23,7 @@ import {
 } from "recharts";
 import { TrendingUp, TrendingDown, DollarSign, Calendar, Activity } from "lucide-react";
 import { toast } from "sonner";
+import { firestoreService } from "@/lib/firestoreService";
 
 const COLORS = [
     "#667eea", "#f5576c", "#4facfe", "#43e97b", 
@@ -37,66 +38,70 @@ export default function AnalyticsPage() {
     const [loading, setLoading] = useState(true);
     const [selectedPeriod, setSelectedPeriod] = useState("today");
 
-    const fetchAnalytics = useCallback(() => {
+    const fetchAnalytics = useCallback(async () => {
         try {
             setLoading(true);
             const session = authService.getSession();
-            const userId = session?.phone.replace(/\+/g, '');
-            const allTransactions = transactionService.getAll(userId);
+            const userId = session?.phone.replace(/\+/g, '').trim();
+            if (!userId) return;
+
+            // Fetch last 500 transactions from Firestore for analytics
+            const res = await firestoreService.getTransactions(userId, 500);
+            const allTransactions = res.success ? res.data : [];
             
             // Calculate today's data
             const now = new Date();
             const todayStart = new Date(now);
             todayStart.setHours(0, 0, 0, 0);
-            const todayTransactions = allTransactions.filter(t => {
+            const todayTransactions = allTransactions.filter((t: any) => {
                 const txDate = new Date(t.date);
                 return txDate >= todayStart && txDate <= now;
             });
 
             const todaySummary: Record<string, number> = {};
-            todayTransactions.forEach(t => {
+            todayTransactions.forEach((t: any) => {
                 if (t.type === 'debit') {
                     todaySummary[t.category] = (todaySummary[t.category] || 0) + t.amount;
                 }
             });
 
-            const todayTotal = todayTransactions.reduce((sum, t) => 
+            const todayTotal = todayTransactions.reduce((sum: number, t: any) => 
                 sum + (t.type === 'debit' ? t.amount : 0), 0
             );
 
             // Calculate monthly data
             const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-            const monthlyTransactions = allTransactions.filter(t => 
+            const monthlyTransactions = allTransactions.filter((t: any) => 
                 new Date(t.date) >= monthStart && new Date(t.date) <= now
             );
             
             const monthlySummary: Record<string, number> = {};
-            monthlyTransactions.forEach(t => {
+            monthlyTransactions.forEach((t: any) => {
                 if (t.type === 'debit') {
                     monthlySummary[t.category] = (monthlySummary[t.category] || 0) + t.amount;
                 }
             });
 
-            const monthlyTotal = monthlyTransactions.reduce((sum, t) => 
+            const monthlyTotal = monthlyTransactions.reduce((sum: number, t: any) => 
                 sum + (t.type === 'debit' ? t.amount : 0), 0
             );
 
             // Calculate weekly data
             const weekStart = new Date(now);
             weekStart.setDate(now.getDate() - 7);
-            const weeklyTransactions = allTransactions.filter(t => {
+            const weeklyTransactions = allTransactions.filter((t: any) => {
                 const txDate = new Date(t.date);
                 return txDate >= weekStart && txDate <= now;
             });
 
             const weeklySummary: Record<string, number> = {};
-            weeklyTransactions.forEach(t => {
+            weeklyTransactions.forEach((t: any) => {
                 if (t.type === 'debit') {
                     weeklySummary[t.category] = (weeklySummary[t.category] || 0) + t.amount;
                 }
             });
 
-            const weeklyTotal = weeklyTransactions.reduce((sum, t) => 
+            const weeklyTotal = weeklyTransactions.reduce((sum: number, t: any) => 
                 sum + (t.type === 'debit' ? t.amount : 0), 0
             );
 
@@ -107,11 +112,11 @@ export default function AnalyticsPage() {
                 hourStart.setHours(i, 0, 0, 0);
                 const hourEnd = new Date(now);
                 hourEnd.setHours(i + 3, 0, 0, 0);
-                const hourTransactions = todayTransactions.filter(t => {
+                const hourTransactions = todayTransactions.filter((t: any) => {
                     const txDate = new Date(t.date);
                     return txDate >= hourStart && txDate < hourEnd;
                 });
-                const hourTotal = hourTransactions.reduce((sum, t) => 
+                const hourTotal = hourTransactions.reduce((sum: number, t: any) => 
                     sum + (t.type === 'debit' ? t.amount : 0), 0
                 );
                 todayHourlyBreakdown.push({
@@ -125,11 +130,11 @@ export default function AnalyticsPage() {
             for (let i = 0; i < 30; i++) {
                 const date = new Date(now);
                 date.setDate(date.getDate() - i);
-                const dayTransactions = monthlyTransactions.filter(t => {
+                const dayTransactions = monthlyTransactions.filter((t: any) => {
                     const txDate = new Date(t.date);
                     return txDate.toDateString() === date.toDateString();
                 });
-                const dayTotal = dayTransactions.reduce((sum, t) => 
+                const dayTotal = dayTransactions.reduce((sum: number, t: any) => 
                     sum + (t.type === 'debit' ? t.amount : 0), 0
                 );
                 dailyBreakdown.push({
@@ -144,11 +149,11 @@ export default function AnalyticsPage() {
             for (let i = 5; i >= 0; i--) {
                 const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
                 const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
-                const monthTransactions = allTransactions.filter(t => {
+                const monthTransactions = allTransactions.filter((t: any) => {
                     const txDate = new Date(t.date);
                     return txDate >= monthDate && txDate <= monthEnd;
                 });
-                const monthTotal = monthTransactions.reduce((sum, t) => 
+                const monthTotal = monthTransactions.reduce((sum: number, t: any) => 
                     sum + (t.type === 'debit' ? t.amount : 0), 0
                 );
                 trendsMonths.push({

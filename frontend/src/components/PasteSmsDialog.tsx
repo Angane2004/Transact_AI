@@ -51,13 +51,15 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
       const data = response.data;
       
       if (data.status === "saved" || data.status === "low_confidence") {
-        const category = data.status === "saved" ? data.category : data.category; // current cat
-        toast.success(data.status === "saved" ? `Saved! Categorized as ${category}` : "Saved with low confidence.");
+        const category = data.status === "saved" ? data.category : data.category;
+        const isLowConfidence = data.status === "low_confidence";
+        
+        toast.success(data.status === "saved" ? `Saved! Categorized as ${category}` : "Saved with low confidence. Please categorize.");
         
         // Sync to Firestore if available
         if (userId) {
             const txnId = `txn_${Date.now()}`;
-            firestoreService.saveTransaction(userId, {
+            await firestoreService.saveTransaction(userId, {
                 id: txnId,
                 description: smsText,
                 amount: data.amount || 0,
@@ -65,7 +67,7 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
                 date: new Date().toISOString(),
                 receiver: data.receiver || "Unknown",
                 type: data.type || "debit",
-                status: "completed"
+                status: isLowConfidence ? "pending" : "completed"
             });
         }
 

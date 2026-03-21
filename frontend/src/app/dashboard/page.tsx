@@ -17,6 +17,7 @@ import { useTheme } from "next-themes";
 import Link from "next/link";
 import { pinService } from "@/lib/localStorageService";
 import { useDensity } from "@/lib/DensityContext";
+import { TransactionCategorizeNotification } from "@/components/TransactionCategorizeNotification";
 import { firestoreService } from "@/lib/firestoreService";
 
 const container = {
@@ -44,6 +45,7 @@ export default function DashboardPage() {
     const [categories, setCategories] = useState<string[]>([]);
     const [showCategories, setShowCategories] = useState(false);
     const [showPinReminder, setShowPinReminder] = useState(false);
+    const [pendingTransaction, setPendingTransaction] = useState<any>(null);
     const { theme } = useTheme();
     const { density, getDensityClasses } = useDensity();
     const densityClasses = getDensityClasses();
@@ -101,31 +103,59 @@ export default function DashboardPage() {
         const session = authService.getSession();
         const userId = session?.phone.replace(/\+/g, '').trim();
 
+        if (!userId) return;
+
         try {
             setLoading(true);
             
-            // Try to sync pending first if we are back online
-            const didSync = await syncPendingTransactions(userId);
+            // 1. Fetch Transactions from Firestore (Increased limit for accurate summary)
+            const transRes = await firestoreService.getTransactions(userId, 500);
+            const allFetchedTransactions = transRes.success ? transRes.data : [];
             
-            // Wait 300ms to ensure any recent saves are committed/indexed
-            await new Promise(resolve => setTimeout(resolve, 300));
-            
-            const [summaryRes, transRes] = await Promise.all([
-                api.get('/summary'),
-                api.get('/transactions', { params: { limit: 10 } })
-            ]);
+            // For the transaction list, we only show the latest 10
+            setTransactions(allFetchedTransactions.slice(0, 10));
 
-            const newSummary = summaryRes.data;
-            const newTransactions = transRes.data.results;
+            // Check for any pending transactions that need categorization
+            const pending = allFetchedTransactions.find((t: any) => t.status === 'pending');
+            if (pending) {
+                setPendingTransaction(pending);
+            } else {
+                setPendingTransaction(null);
+            }
+
+            // 2. Fetch Categories from Firestore
+            const catRes = await firestoreService.getCategories(userId);
+            const fetchedCategories = catRes.success ? catRes.data : [];
+            setCategories(fetchedCategories);
+
+            // 3. Calculate Summary Locally from ALL fetched transactions for accuracy
+            const totalSpent = allFetchedTransactions
+                .filter((t: any) => t.type === 'debit')
+                .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+            
+            const categorySummary: Record<string, number> = {};
+            allFetchedTransactions.forEach((t: any) => {
+                if (t.category && t.type === 'debit') {
+                    categorySummary[t.category] = (categorySummary[t.category] || 0) + (t.amount || 0);
+                }
+            });
+
+            const sortedCategories = Object.entries(categorySummary).sort((a: any, b: any) => b[1] - a[1]);
+            const highestCat = sortedCategories.length > 0 ? sortedCategories[0][0] : "N/A";
+
+            const newSummary = {
+                total_spent: totalSpent,
+                total_transactions: allFetchedTransactions.length,
+                category_summary: categorySummary,
+                highest_spending_category: highestCat,
+            };
 
             setSummary(newSummary);
-            setTransactions(newTransactions);
 
-            // Update Cache
-            if (userId) {
-                cacheService.saveSummary(newSummary, userId);
-                transactionService.saveMany(newTransactions, userId);
-            }
+            // Sync Cache
+            cacheService.saveSummary(newSummary, userId);
+            transactionService.saveMany(allFetchedTransactions, userId);
+
         } catch (error: any) {
             console.error("Connectivity issue or empty account:", error);
             
@@ -136,21 +166,11 @@ export default function DashboardPage() {
             if (cachedSummary) {
                 setSummary(cachedSummary);
                 setTransactions(cachedTransactions);
-                toast.info("Working in offline mode (using cached data)");
-            } else {
-                // Truly empty state
-                setTransactions([]);
-                setSummary({
-                    total_spent: 0,
-                    total_transactions: 0,
-                    category_summary: {},
-                    highest_spending_category: null,
-                });
             }
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [syncPendingTransactions]);
 
 
     useEffect(() => {
@@ -160,6 +180,32 @@ export default function DashboardPage() {
     const handleCategoryAdded = useCallback(() => {
         fetchData();
     }, [fetchData]);
+
+    const handleCategorized = async (category: string) => {
+        if (!pendingTransaction) return;
+        
+        const session = authService.getSession();
+        const userId = session?.phone.replace(/\+/g, '').trim();
+        if (!userId) return;
+
+        try {
+            const res = await firestoreService.updateTransaction(userId, pendingTransaction.id, {
+                category: category,
+                status: 'completed'
+            });
+            
+            if (res.success) {
+                toast.success(`Transaction categorized as ${category}`);
+                setPendingTransaction(null);
+                fetchData(); // Refresh all data
+            } else {
+                toast.error("Failed to update cloud transaction");
+            }
+        } catch (error) {
+            console.error("Categorization error:", error);
+            toast.error("An error occurred while categorizing");
+        }
+    };
 
     const categoryCount = useMemo(() => {
         return Object.keys(summary?.category_summary || {}).length;
@@ -318,6 +364,18 @@ export default function DashboardPage() {
                     </div>
                 </motion.div>
             )}
+
+            <AnimatePresence>
+                {pendingTransaction && (
+                    <TransactionCategorizeNotification
+                        open={!!pendingTransaction}
+                        amount={pendingTransaction.amount || 0}
+                        receiver={pendingTransaction.receiver || pendingTransaction.description || "Unknown"}
+                        onCategorized={handleCategorized}
+                        onDismiss={() => setPendingTransaction(null)}
+                    />
+                )}
+            </AnimatePresence>
 
             {/* Categories Dialog */}
             <CategoriesDialog
