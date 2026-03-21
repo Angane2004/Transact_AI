@@ -34,7 +34,7 @@ export default function TransactionsPage() {
 
     const loadData = async () => {
         const session = authService.getSession();
-        const userId = session?.phone.replace(/\+/g, '');
+        const userId = session?.phone.replace(/\+/g, '').trim();
 
         try {
             setLoading(true);

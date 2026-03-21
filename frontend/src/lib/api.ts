@@ -17,10 +17,15 @@ api.interceptors.request.use((config) => {
         const sessionStr = typeof window !== 'undefined' ? localStorage.getItem('transactai_session') : null;
         if (sessionStr) {
             const session = JSON.parse(sessionStr);
-            const userId = session.phone?.replace(/\+/g, '');
+            const userId = session.phone?.replace(/\+/g, '').trim();
             if (userId) {
+                // console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url} | Header X-User-Id: ${userId}`);
                 config.headers['X-User-Id'] = userId;
+            } else {
+                // console.warn(`⚠️ API Request: ${config.method?.toUpperCase()} ${config.url} | No User ID found in session`);
             }
+        } else {
+            // console.warn(`⚠️ API Request: ${config.method?.toUpperCase()} ${config.url} | No session found`);
         }
     } catch (e) {
         console.error("Failed to inject user id header", e);

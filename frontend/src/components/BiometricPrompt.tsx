@@ -76,11 +76,8 @@ export function BiometricPrompt({
         await startCamera();
     }
 
-    // Auto-start scanning after a brief delay for realism
-    const timer = setTimeout(() => {
-      handleAuthenticate();
-    }, 1200);
-    return () => clearTimeout(timer);
+    // REMOVED: Auto-start scanning (causes NotAllowedError in many browsers)
+    // The user must click the "Verify" button instead.
   };
 
   const handleAuthenticate = async () => {
@@ -215,6 +212,13 @@ export function BiometricPrompt({
                         <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }} className="w-2 h-2 bg-blue-500 rounded-full" />
                     </div>
                 </div>
+            ) : status === "idle" ? (
+                <Button 
+                    onClick={handleAuthenticate}
+                    className="w-full h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all shadow-md active:scale-95"
+                >
+                    {mode === "enroll" ? "Start Enrollment" : "Verify with Biometrics"}
+                </Button>
             ) : (
                 <div className="h-12" />
             )}

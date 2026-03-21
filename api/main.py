@@ -54,7 +54,7 @@ app.add_middleware(
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["X-User-Id", "Content-Type", "Authorization", "Accept", "Origin"],
 )
 
 # Include routers
@@ -144,6 +144,7 @@ from fastapi import Header
 
 def get_current_user_id(x_user_id: Optional[str] = Header(None)):
     """Simple header-based user identification for production demonstration."""
+    # print(f"DEBUG: Received X-User-Id: {x_user_id}")
     return x_user_id or "default_user"
 
 # ============================================================

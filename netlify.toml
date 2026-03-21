@@ -1,0 +1,12 @@
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = ".next"
+
+[context.production.environment]
+  PYTHON_VERSION = "3.11"
+  NODE_VERSION = "20"
+  NEXT_PUBLIC_API_URL = "http://localhost:8000" # Change this in Netlify UI later
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

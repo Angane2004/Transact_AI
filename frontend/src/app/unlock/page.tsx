@@ -29,13 +29,13 @@ export default function UnlockPage() {
         setUserId(phone);
         setLoading(false);
 
-        // Check if biometrics is enabled to auto-trigger
+        // Check if biometrics is enabled to show the prompt
         const bioConfig = biometricService.get(phone);
         if (bioConfig?.enabled) {
             setBioType(bioConfig.type);
-            setTimeout(() => {
-                setShowBioPrompt(true);
-            }, 500);
+            // WE NO LONGER AUTO-TRIGGER (causes NotAllowedError)
+            // SHOW the prompt, but the user must click "Scan" inside it.
+            setShowBioPrompt(true);
         }
     }, [router]);
 

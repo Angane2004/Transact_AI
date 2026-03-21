@@ -11,7 +11,7 @@ import { DashboardCharts } from "@/components/DashboardCharts";
 import { PasteSmsDialog } from "@/components/PasteSmsDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { IndianRupee, CreditCard, Activity, TrendingUp, Sparkles, Lock, X } from "lucide-react";
+import { IndianRupee, CreditCard, Activity, TrendingUp, Sparkles, Lock, X, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import Link from "next/link";
@@ -99,7 +99,7 @@ export default function DashboardPage() {
 
     const fetchData = useCallback(async () => {
         const session = authService.getSession();
-        const userId = session?.phone.replace(/\+/g, '');
+        const userId = session?.phone.replace(/\+/g, '').trim();
 
         try {
             setLoading(true);
@@ -258,10 +258,19 @@ export default function DashboardPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
+                    <Button 
+                        variant="outline" 
+                        size="icon" 
+                        onClick={fetchData} 
+                        disabled={loading}
+                        className="rounded-full shadow-sm hover:bg-primary/5 hover:border-primary/50 transition-all"
+                    >
+                        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                    </Button>
                     <PasteSmsDialog onTransactionAdded={fetchData} />
                     <AddCategoryDialog onCategoryAdded={handleCategoryAdded} />
                     <Link href="/dashboard/transactions">
-                        <Button variant="outline">
+                        <Button variant="outline" className="shadow-sm">
                             View All Transactions
                         </Button>
                     </Link>
