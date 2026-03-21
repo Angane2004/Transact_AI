@@ -3,9 +3,9 @@ services:
     name: transact-ai-backend
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn api.main:app -k uvicorn.workers.UvicornWorker
+    startCommand: gunicorn -w 1 -k uvicorn.workers.UvicornWorker api.main:app --bind 0.0.0.0:$PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
-      - key: PORT
-        value: 8000
+      - key: SKIP_ML_LOAD
+        value: "true"
