@@ -28,10 +28,11 @@ Write-Host "📦 Initializing database..." -ForegroundColor Cyan
 python init_database.py
 Write-Host ""
 
-# Start Backend in background
-Write-Host "🔧 Starting Backend (FastAPI) on http://localhost:8000..." -ForegroundColor Cyan
+# Start Backend in background (Enabling SKIP_ML_LOAD for faster local startup)
+Write-Host "🔧 Starting Backend (FastAPI) on http://localhost:8000 (ML Bypass: Enabled)..." -ForegroundColor Cyan
 $backendJob = Start-Job -ScriptBlock {
     $env:PYTHONPATH = $using:PWD
+    $env:SKIP_ML_LOAD = "true"
     Set-Location $using:PWD
     uvicorn api.main:app --reload --port 8000
 }

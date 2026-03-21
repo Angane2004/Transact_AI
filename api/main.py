@@ -7,7 +7,7 @@ import traceback
 import os
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, asc, func
+from sqlalchemy import desc, asc, func, cast, Date
 import pandas as pd
 
 # Import database and models
@@ -79,15 +79,19 @@ def init_db():
 processor = TransactionPreprocessor()
 
 # Initialize classifier and attach to app.state for global reload access
-try:
-    initial_classifier = TransactionClassifier()
-    initial_classifier.load(dir_path="models", name="classifier")
-    app.state.classifier = initial_classifier
-    print("✅ ML Model loaded successfully")
-except Exception as e:
-    print(f"⚠️ ML Model loading warning: {e}")
-    print("⚠️ Running without ML model - some features may be limited")
+if os.getenv("SKIP_ML_LOAD") == "true":
+    print("⏭️  Skipping ML Model loading as per environment variable")
     app.state.classifier = None
+else:
+    try:
+        initial_classifier = TransactionClassifier()
+        initial_classifier.load(dir_path="models", name="classifier")
+        app.state.classifier = initial_classifier
+        print("✅ ML Model loaded successfully")
+    except Exception as e:
+        print(f"⚠️ ML Model loading warning: {e}")
+        print("⚠️ Running without ML model - some features may be limited")
+        app.state.classifier = None
 
 # Initialize AI Agents
 parser_agent = ParserAgent()
@@ -174,42 +178,43 @@ def classify(payload: Dict, db: Session = Depends(get_db), user_id: str = Depend
     amount = extract_amount(text)
     receiver = extract_recipient(text)
     txn_time = datetime.now()
+    is_anomaly = False
+    anomaly_reason = None
     
-    if conf >= 0.6:
-        is_anomaly = False
-        anomaly_reason = None
-        
-        # Check for anomaly
-        if anomaly_agent.is_enabled():
-            anomaly_result = anomaly_agent.detect(
-                amount=amount, category=cat, merchant=receiver, text=text
-            )
-            if anomaly_result and anomaly_result.is_anomaly:
-                is_anomaly = True
-                anomaly_reason = anomaly_result.anomaly_reason
-
-        txn = Transaction(
-            raw_text=text,
-            clean_text=cleaned,
-            amount=amount,
-            sender_name="You",
-            receiver_name=receiver,
-            txn_time=txn_time,
-            predicted_category=cat,
-            confidence=float(conf),
-            source="mobile",
-            is_anomaly=is_anomaly,
-            anomaly_reason=anomaly_reason,
-            user_id=user_id
+    # Check for anomaly
+    if anomaly_agent.is_enabled():
+        anomaly_result = anomaly_agent.detect(
+            amount=amount, category=cat, merchant=receiver, text=text
         )
-        try:
-            db.add(txn)
-            db.commit()
-            db.refresh(txn)
-        except Exception as e:
-            db.rollback()
-            print(f"Failed to save transaction to DB: {e}")
+        if anomaly_result and anomaly_result.is_anomaly:
+            is_anomaly = True
+            anomaly_reason = anomaly_result.anomaly_reason
 
+    # Create and save transaction regardless of confidence
+    txn = Transaction(
+        raw_text=text,
+        clean_text=cleaned,
+        amount=amount,
+        sender_name="You",
+        receiver_name=receiver,
+        txn_time=txn_time,
+        predicted_category=cat,
+        confidence=float(conf),
+        source="mobile",
+        is_anomaly=is_anomaly,
+        anomaly_reason=anomaly_reason,
+        user_id=user_id
+    )
+    try:
+        db.add(txn)
+        db.commit()
+        db.refresh(txn)
+    except Exception as e:
+        db.rollback()
+        print(f"Failed to save transaction to DB: {e}")
+
+    # Determine response status based on confidence
+    if conf >= 0.6:
         return {
             "status": "saved",
             "category": cat,
@@ -220,7 +225,7 @@ def classify(payload: Dict, db: Session = Depends(get_db), user_id: str = Depend
             "anomaly_reason": anomaly_reason
         }
 
-    # Call Confidence Agent to explain low confidence
+    # Call Confidence Agent to explain low confidence for the UI toast/warning
     ai_explanation = None
     ai_suggestions = []
     if confidence_agent.is_enabled():
@@ -241,7 +246,8 @@ def classify(payload: Dict, db: Session = Depends(get_db), user_id: str = Depend
         "clean_text": cleaned,
         "raw_text": text,
         "ai_explanation": ai_explanation,
-        "ai_suggestions": ai_suggestions
+        "ai_suggestions": ai_suggestions,
+        "category": cat
     }
 
 # ============================================================
@@ -460,12 +466,26 @@ def get_summary(db: Session = Depends(get_db), user_id: str = Depends(get_curren
 
         highest_category = max(category_summary, key=category_summary.get) if category_summary else None
 
+        # Daily breakdown for charts
+        daily_data = (
+            db.query(cast(Transaction.txn_time, Date), func.sum(Transaction.amount))
+            .filter(Transaction.user_id == user_id)
+            .group_by(cast(Transaction.txn_time, Date))
+            .order_by(asc(cast(Transaction.txn_time, Date)))
+            .all()
+        )
+        daily_breakdown = [
+            {"date": row[0].isoformat() if row[0] else None, "total": float(row[1]) if row[1] else 0.0}
+            for row in daily_data
+        ]
+
         return {
             "total_spent": float(total_spent),
             "total_transactions": total_transactions,
             "category_summary": category_summary,
             "highest_spending_category": highest_category,
             "latest_transaction": latest_txn,
+            "daily_breakdown": daily_breakdown,
         }
     except Exception as e:
         print(f"Summary error: {e}")

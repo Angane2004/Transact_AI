@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { api } from "@/lib/api";
+import { authService, transactionService } from "@/lib/localStorageService";
+import { firestoreService } from "@/lib/firestoreService";
 
 interface PasteSmsDialogProps {
   onTransactionAdded: () => void;
@@ -40,22 +42,59 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
   };
 
   const handleConfirm = async () => {
+    const session = authService.getSession();
+    const userId = session?.phone.replace(/\+/g, '');
+
     setLoading(true);
     try {
       const response = await api.post("/classify", { message: smsText });
       const data = response.data;
       
-      if (data.status === "saved") {
-        toast.success(`Saved! Categorized as ${data.category}`);
-        onTransactionAdded();
-        handleClose();
-      } else if (data.status === "low_confidence") {
-        toast.warning("Categorized with low confidence. Please review in transactions list.");
+      if (data.status === "saved" || data.status === "low_confidence") {
+        const category = data.status === "saved" ? data.category : data.category; // current cat
+        toast.success(data.status === "saved" ? `Saved! Categorized as ${category}` : "Saved with low confidence.");
+        
+        // Sync to Firestore if available
+        if (userId) {
+            const txnId = `txn_${Date.now()}`;
+            firestoreService.saveTransaction(userId, {
+                id: txnId,
+                description: smsText,
+                amount: data.amount || 0,
+                category: category,
+                date: new Date().toISOString(),
+                receiver: data.receiver || "Unknown",
+                type: data.type || "debit",
+                status: "completed"
+            });
+        }
+
         onTransactionAdded();
         handleClose();
       }
     } catch (error) {
-       toast.error("Failed to save transaction");
+       console.error("Failed to save to cloud, falling back to local:", error);
+       
+       // Offline saving fallback
+       if (parsedData) {
+         const offlineTxn = {
+           id: `offline_${Date.now()}`,
+           description: smsText,
+           amount: parsedData.amount || 0,
+           category: parsedData.category || "Uncategorized",
+           date: new Date().toISOString(),
+           recipient: parsedData.merchant || "Unknown",
+           type: parsedData.type || "debit",
+           status: "pending" as const
+         };
+         
+         transactionService.save(offlineTxn, userId);
+         toast.info("Saved locally (offline mode). It will sync when cloud is back.");
+         onTransactionAdded();
+         handleClose();
+       } else {
+         toast.error("Failed to save transaction. Try again later.");
+       }
     } finally {
       setLoading(false);
     }

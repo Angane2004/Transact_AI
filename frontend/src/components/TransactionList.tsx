@@ -42,7 +42,15 @@ export const TransactionList = memo(function TransactionList({ transactions }: {
                                         {txn.description || txn.receiver_name || txn.recipient || "Unnamed Transaction"}
                                     </span>
                                     <span className="text-xs text-muted-foreground mt-1">
-                                        {format(new Date(txn.txn_time || txn.date), "MMM d, yyyy h:mm a")}
+                                        {(() => {
+                                            try {
+                                                const date = new Date(txn.txn_time || txn.date);
+                                                if (isNaN(date.getTime())) return "Unknown Date";
+                                                return format(date, "MMM d, yyyy h:mm a");
+                                            } catch (e) {
+                                                return "Unknown Date";
+                                            }
+                                        })()}
                                     </span>
                                 </div>
                                 <div className="flex flex-col items-end ml-4">

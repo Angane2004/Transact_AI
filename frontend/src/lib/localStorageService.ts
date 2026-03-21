@@ -76,6 +76,23 @@ const STORAGE_KEYS = {
     ONBOARDING_COMPLETE: 'transactai_onboarding_complete',
     DOWNLOADS: 'transactai_downloads',
     BIOMETRICS: 'transactai_biometrics',
+    SUMMARY_CACHE: 'transactai_summary_cache',
+};
+
+// Cache Operations for Offline Mode
+export const cacheService = {
+    saveSummary(summary: any, userId?: string): void {
+        if (typeof window === 'undefined') return;
+        const key = getUserKey(STORAGE_KEYS.SUMMARY_CACHE, userId);
+        localStorage.setItem(key, JSON.stringify(summary));
+    },
+
+    getSummary(userId?: string): any | null {
+        if (typeof window === 'undefined') return null;
+        const key = getUserKey(STORAGE_KEYS.SUMMARY_CACHE, userId);
+        const data = localStorage.getItem(key);
+        return data ? JSON.parse(data) : null;
+    }
 };
 
 // User Profile Operations
@@ -157,6 +174,14 @@ export const transactionService = {
             return date >= new Date(startDate) && date <= new Date(endDate);
         });
     },
+
+    getPendingSync(userId?: string): Transaction[] {
+        return this.getAll(userId).filter(t => t.status === "pending");
+    },
+
+    markAsSynced(id: string, userId?: string): void {
+        this.update(id, { status: "completed" }, userId);
+    }
 };
 
 // Category Operations

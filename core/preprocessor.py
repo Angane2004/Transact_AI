@@ -20,26 +20,48 @@ from typing import List, Optional
 def extract_amount(text: str) -> Optional[float]:
     """
     Extract amount from transaction text.
-
-    Supports:
-    - ₹389
-    - Rs 389
-    - RS. 2,499.00
-    - INR 1200
-    - 1,20,000.50
+    Prioritizes matches with currency symbols to avoid account numbers (like XX1234).
     """
 
-    pattern = r"(?:₹|rs\.?|inr)?\s*([\d,]+(?:\.\d{1,2})?)"
-    matches = re.findall(pattern, text, flags=re.IGNORECASE)
+    # 1. Try to find amounts with explicit currency symbols (High Priority)
+    currency_pattern = r"(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d{1,2})?)"
+    currency_matches = re.finditer(currency_pattern, text, flags=re.IGNORECASE)
+    
+    # Take the first currency match as it's most likely the actual amount
+    for match in currency_matches:
+        amount_str = match.group(1).replace(",", "")
+        try:
+            return float(amount_str)
+        except:
+            continue
 
-    if not matches:
-        return None
+    # 2. Try to find numbers following transaction keywords
+    context_pattern = r"(?:debited for|spent|paid|amount)\s+([\d,]+(?:\.\d{1,2})?)"
+    context_matches = re.finditer(context_pattern, text, flags=re.IGNORECASE)
+    for match in context_matches:
+        amount_str = match.group(1).replace(",", "")
+        try:
+            return float(amount_str)
+        except:
+            continue
 
-    amount = matches[0].replace(",", "")
-    try:
-        return float(amount)
-    except:
-        return None
+    # 3. Last resort: match any number but SKIP those that look like account numbers (Avoid picking up XX1234)
+    all_numbers_pattern = r"([\d,]+(?:\.\d{1,2})?)"
+    all_matches = re.finditer(all_numbers_pattern, text, flags=re.IGNORECASE)
+    for match in all_matches:
+        val_str = match.group(1).replace(",", "")
+        # Heuristic: account numbers are often precisely 4 digits and preceded by 'XX' or 'no.'
+        start = match.start()
+        prefix = text[max(0, start-10):start].lower()
+        if "xx" in prefix or "no." in prefix or "acct" in prefix or "a/c" in prefix:
+            continue
+            
+        try:
+            return float(val_str)
+        except:
+            continue
+                 
+    return None
 
 
 # ============================================================

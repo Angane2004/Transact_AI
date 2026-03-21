@@ -5,6 +5,7 @@ from google import genai
 from pydantic import BaseModel
 from typing import TypeVar, Type, Optional
 from dotenv import load_dotenv
+import concurrent.futures
 
 load_dotenv()
 
@@ -73,11 +74,14 @@ class BaseAgent:
             if system_instruction:
                 config["system_instruction"] = system_instruction
 
-            response = self.client.models.generate_content(
-                model=self.default_model,
-                contents=prompt,
-                config=config,
-            )
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    self.client.models.generate_content,
+                    model=self.default_model,
+                    contents=prompt,
+                    config=config
+                )
+                response = future.result(timeout=15) # 15 second internal timeout
             
             # response.text should be valid XML/JSON matching the schema, but we can access response.parsed
             # Google genai structured output often sets .parsed if configured correctly.
@@ -110,11 +114,14 @@ class BaseAgent:
             if system_instruction:
                 config["system_instruction"] = system_instruction
 
-            response = self.client.models.generate_content(
-                model=self.default_model,
-                contents=prompt,
-                config=config,
-            )
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    self.client.models.generate_content,
+                    model=self.default_model,
+                    contents=prompt,
+                    config=config
+                )
+                response = future.result(timeout=15) # 15 second internal timeout
             return response.text
         except Exception as e:
             print(f"[{self.__class__.__name__}] Error generating text: {e}")

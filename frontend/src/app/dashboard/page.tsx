@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { authService } from "@/lib/localStorageService";
+import { authService, transactionService, cacheService } from "@/lib/localStorageService";
 import { api } from "@/lib/api";
 import { AddCategoryDialog } from "@/components/AddCategoryDialog";
 import { CategoriesDialog } from "@/components/CategoriesDialog";
@@ -17,6 +17,7 @@ import { useTheme } from "next-themes";
 import Link from "next/link";
 import { pinService } from "@/lib/localStorageService";
 import { useDensity } from "@/lib/DensityContext";
+import { firestoreService } from "@/lib/firestoreService";
 
 const container = {
     hidden: { opacity: 0 },
@@ -57,26 +58,92 @@ export default function DashboardPage() {
         }
     }, []);
 
+    const syncPendingTransactions = useCallback(async (userId: string | undefined) => {
+        const pending = transactionService.getPendingSync(userId);
+        if (pending.length === 0) return;
+
+        console.log(`🔄 Syncing ${pending.length} pending transactions...`);
+        let syncedCount = 0;
+
+        for (const txn of pending) {
+            try {
+                // Try to classify and save to backend
+                const res = await api.post("/classify", { message: txn.description });
+                if (res.data.status === "saved" || res.data.status === "low_confidence") {
+                    transactionService.markAsSynced(txn.id, userId);
+                    
+                    // Also sync to Firestore
+                    if (userId) {
+                        firestoreService.saveTransaction(userId, {
+                            ...txn,
+                            amount: res.data.amount || txn.amount,
+                            category: res.data.status === "saved" ? res.data.category : txn.category,
+                            status: "completed"
+                        });
+                    }
+                    
+                    syncedCount++;
+                }
+            } catch (e) {
+                console.error(`Failed to sync txn ${txn.id}:`, e);
+                break; // Stop syncing if connection is lost again
+            }
+        }
+
+        if (syncedCount > 0) {
+            toast.success(`Synced ${syncedCount} offline transactions!`);
+            return true;
+        }
+        return false;
+    }, []);
+
     const fetchData = useCallback(async () => {
+        const session = authService.getSession();
+        const userId = session?.phone.replace(/\+/g, '');
+
         try {
             setLoading(true);
+            
+            // Try to sync pending first if we are back online
+            const didSync = await syncPendingTransactions(userId);
+            
             const [summaryRes, transRes] = await Promise.all([
                 api.get('/summary'),
                 api.get('/transactions', { params: { limit: 10 } })
             ]);
 
-            setSummary(summaryRes.data);
-            setTransactions(transRes.data.results);
+            const newSummary = summaryRes.data;
+            const newTransactions = transRes.data.results;
+
+            setSummary(newSummary);
+            setTransactions(newTransactions);
+
+            // Update Cache
+            if (userId) {
+                cacheService.saveSummary(newSummary, userId);
+                transactionService.saveMany(newTransactions, userId);
+            }
         } catch (error: any) {
             console.error("Connectivity issue or empty account:", error);
-            // Gracefully fallback to empty state without intrusive "dummy" alerts
-            setTransactions([]);
-            setSummary({
-                total_spent: 0,
-                total_transactions: 0,
-                category_summary: {},
-                highest_spending_category: null,
-            });
+            
+            // Fallback to cache
+            const cachedSummary = cacheService.getSummary(userId);
+            const cachedTransactions = transactionService.getAll(userId).slice(0, 10);
+
+            if (cachedSummary) {
+                setSummary(cachedSummary);
+                setTransactions(cachedTransactions);
+                toast.info("Working in offline mode (using cached data)");
+            } else {
+                // Truly empty state
+                setTransactions([]);
+                setSummary({
+                    total_spent: 0,
+                    total_transactions: 0,
+                    category_summary: {},
+                    highest_spending_category: null,
+                });
+            }
         } finally {
             setLoading(false);
         }

@@ -219,7 +219,7 @@ export default function SetupPage() {
                                     transition={{ delay: 0.8 }}
                                     className="pt-2 sm:pt-4"
                                 >
-                                    <label className="text-sm sm:text-base font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Phone Number</label>
+                                    <label className="text-sm sm:text-base font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Phone Number / Email</label>
                                     <Input value={phoneNumber || "Loading..."} disabled className="mt-2 bg-muted h-10 sm:h-11 text-sm sm:text-base" />
                                 </motion.div>
                                 <motion.div

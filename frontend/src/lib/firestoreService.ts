@@ -189,5 +189,44 @@ export const firestoreService = {
             console.warn("⚠️ Firestore not available, using localStorage fallback");
             return false;
         }
+    },
+
+    // Transaction Operations
+    async saveTransaction(userId: string, transaction: any) {
+        if (isSimulationMode || !firestore) return { success: false };
+        try {
+            const transRef = docFn(firestore, "users", userId, "transactions", transaction.id);
+            await setDocFn(transRef, {
+                ...transaction,
+                serverTimestamp: Timestamp.now(),
+                updatedAt: Timestamp.now(),
+            });
+            return { success: true };
+        } catch (error) {
+            console.error("❌ Firestore transaction save error:", error);
+            return { success: false, error };
+        }
+    },
+
+    async getTransactions(userId: string, limitCount: number = 50) {
+        if (isSimulationMode || !firestore) return { success: false, data: [] };
+        try {
+            const firestoreModule = require("firebase/firestore");
+            const transactionsRef = collectionFn(firestore, "users", userId, "transactions");
+            const q = firestoreModule.query(
+                transactionsRef, 
+                firestoreModule.orderBy("date", "desc"), 
+                firestoreModule.limit(limitCount)
+            );
+            const querySnapshot = await getDocsFn(q);
+            const transactions = querySnapshot.docs.map((doc: any) => ({
+                ...doc.data(),
+                id: doc.id
+            }));
+            return { success: true, data: transactions };
+        } catch (error) {
+            console.error("❌ Firestore transactions get error:", error);
+            return { success: false, error, data: [] };
+        }
     }
 };

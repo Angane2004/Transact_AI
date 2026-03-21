@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { transactionService, categoryService, authService, downloadService, DownloadRecord } from "@/lib/localStorageService";
+import { transactionService, categoryService, authService, downloadService, DownloadRecord, cacheService } from "@/lib/localStorageService";
 import { api, endpoints } from "@/lib/api";
 import { Download, FileText, FileSpreadsheet, FileJson, Filter, Search, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
@@ -33,6 +33,9 @@ export default function TransactionsPage() {
     }, [transactions, selectedCategory, selectedPeriod, searchQuery]);
 
     const loadData = async () => {
+        const session = authService.getSession();
+        const userId = session?.phone.replace(/\+/g, '');
+
         try {
             setLoading(true);
             const [transRes, summaryRes] = await Promise.all([
@@ -40,11 +43,33 @@ export default function TransactionsPage() {
                 api.get(endpoints.getSummary)
             ]);
             
-            setTransactions(transRes.data.results);
-            setCategories(Object.keys(summaryRes.data.category_summary || {}));
+            const newTransactions = transRes.data.results;
+            const newSummary = summaryRes.data;
+
+            setTransactions(newTransactions);
+            setCategories(Object.keys(newSummary.category_summary || {}));
+
+            // Update Cache
+            if (userId) {
+                transactionService.saveMany(newTransactions, userId);
+                cacheService.saveSummary(newSummary, userId);
+            }
         } catch (error) {
             console.error("Failed to load transactions:", error);
-            toast.error("Failed to sync with cloud. Transactions might be outdated.");
+            
+            // Fallback to Cache
+            const cachedTransactions = transactionService.getAll(userId);
+            const cachedSummary = cacheService.getSummary(userId);
+
+            if (cachedTransactions.length > 0) {
+                setTransactions(cachedTransactions);
+                if (cachedSummary) {
+                    setCategories(Object.keys(cachedSummary.category_summary || {}));
+                }
+                toast.info("Showing cached transactions (offline)");
+            } else {
+                toast.error("Failed to sync with cloud. No local data found.");
+            }
         } finally {
             setLoading(false);
         }
@@ -345,11 +370,19 @@ export default function TransactionsPage() {
                                                 className="border-b hover:bg-muted/50 transition-colors"
                                             >
                                                 <td className="py-3 px-4">
-                                                    {new Date(transaction.date).toLocaleDateString('en-IN', {
-                                                        day: '2-digit',
-                                                        month: 'short',
-                                                        year: 'numeric'
-                                                    })}
+                                                    {(() => {
+                                                        try {
+                                                            const date = new Date(transaction.txn_time || transaction.date);
+                                                            if (isNaN(date.getTime())) return "Unknown Date";
+                                                            return date.toLocaleDateString('en-IN', {
+                                                                day: '2-digit',
+                                                                month: 'short',
+                                                                year: 'numeric'
+                                                            });
+                                                        } catch (e) {
+                                                            return "Unknown Date";
+                                                        }
+                                                    })()}
                                                 </td>
                                                 <td className="py-3 px-4 font-medium">
                                                     <div className="flex flex-col">

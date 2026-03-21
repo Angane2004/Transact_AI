@@ -1,9 +1,7 @@
-"use client";
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Fingerprint, ScanFace, ShieldCheck, X } from "lucide-react";
+import { Fingerprint, ScanFace, ShieldCheck, X, Camera } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface BiometricPromptProps {
@@ -25,43 +23,126 @@ export function BiometricPrompt({
 }: BiometricPromptProps) {
   const [status, setStatus] = useState<"idle" | "scanning" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     if (open) {
-      setStatus("idle");
-      // Auto-start scanning after a brief delay for realism
-      const timer = setTimeout(() => {
-        handleAuthenticate();
-      }, 800);
-      return () => clearTimeout(timer);
+      checkSupportAndStart();
+    } else {
+      stopCamera();
     }
   }, [open]);
+
+  const startCamera = async () => {
+    if (type !== "face" && type !== "both") return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.warn("Camera access denied or unavailable", err);
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+  };
+
+  const checkSupportAndStart = async () => {
+    setStatus("idle");
+    
+    // 1. Check if WebAuthn is supported
+    if (!window.PublicKeyCredential) {
+      setStatus("error");
+      setErrorMessage("Biometric hardware is not supported on this browser/device.");
+      return;
+    }
+
+    // 2. Check if platform authenticator (Fingerprint/FaceID) is available
+    const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    if (!available) {
+      setStatus("error");
+      setErrorMessage("No Biometric hardware (Fingerprint/Face ID) found on this device.");
+      return;
+    }
+
+    if (type === "face" || type === "both") {
+        await startCamera();
+    }
+
+    // Auto-start scanning after a brief delay for realism
+    const timer = setTimeout(() => {
+      handleAuthenticate();
+    }, 1200);
+    return () => clearTimeout(timer);
+  };
 
   const handleAuthenticate = async () => {
     setStatus("scanning");
     
     try {
-      // Real WebAuthn integration would go here
-      // For this demo/production-ready web flow, we trigger the native prompt
-      // and simulate the success based on native interaction if possible.
-      // Since navigator.credentials.get() requires a lot of server-side challenge logic,
-      // we will implement a high-fidelity "Secure Simulation" that feels native.
-      
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      setStatus("success");
-      setTimeout(() => {
-        onSuccess();
-      }, 500);
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+
+      const credential = await navigator.credentials.get({
+        publicKey: {
+          challenge,
+          rpId: window.location.hostname,
+          userVerification: "required",
+          timeout: 60000,
+        }
+      });
+
+      if (credential) {
+        stopCamera();
+        setStatus("success");
+        setTimeout(() => {
+          onSuccess();
+        }, 500);
+      } else {
+        throw new Error("No credential returned");
+      }
     } catch (err: any) {
+      console.error("Biometric error:", err);
+      // We don't stop camera on error because they might retry
       setStatus("error");
-      setErrorMessage("Biometric verification failed. Please try again.");
+      if (err.name === "NotAllowedError") {
+        setErrorMessage("Verification cancelled or timed out.");
+      } else {
+        setErrorMessage("Biometric verification failed. Please try again.");
+      }
     }
   };
 
   const getIcon = () => {
     if (status === "success") return <ShieldCheck className="h-16 w-16 text-green-500" />;
     
+    if (status === "scanning" && (type === "face" || type === "both")) {
+        return (
+            <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-blue-500 shadow-lg bg-black">
+                <video 
+                    ref={videoRef} 
+                    autoPlay 
+                    playsInline 
+                    muted 
+                    className="w-full h-full object-cover scale-x-[-1]"
+                />
+                <motion.div 
+                    animate={{ y: ["-100%", "100%", "-100%"] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                    className="absolute top-0 left-0 w-full h-[2px] bg-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.8)] z-10"
+                />
+                <div className="absolute inset-0 border-[20px] border-black/20 rounded-full pointer-events-none" />
+            </div>
+        );
+    }
+
     switch (type) {
       case "face":
         return <ScanFace className={`h-16 w-16 ${status === 'scanning' ? 'text-blue-500 animate-pulse' : 'text-gray-400'}`} />;
@@ -78,7 +159,10 @@ export function BiometricPrompt({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(val) => {
+        if (!val) stopCamera();
+        onOpenChange(val);
+    }}>
       <DialogContent className="sm:max-w-[400px] border-none bg-white dark:bg-gray-900 rounded-[28px] p-0 overflow-hidden shadow-2xl">
         <div className="p-8 flex flex-col items-center text-center space-y-6">
           <DialogHeader className="w-full">
@@ -131,11 +215,16 @@ export function BiometricPrompt({
                         <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.4 }} className="w-2 h-2 bg-blue-500 rounded-full" />
                     </div>
                 </div>
-            ) : null}
+            ) : (
+                <div className="h-12" />
+            )}
             
             <Button 
               variant="ghost" 
-              onClick={onCancel}
+              onClick={() => {
+                stopCamera();
+                onCancel();
+              }}
               className="w-full h-12 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
             >
               {mode === "enroll" ? "Maybe Later" : "Use PIN Instead"}

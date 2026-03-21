@@ -2,6 +2,7 @@
 
 from .base import BaseAgent
 from typing import Optional, List, Dict
+from pydantic import BaseModel
 import json
 
 class ChatAgent(BaseAgent):
@@ -23,6 +24,12 @@ class ChatAgent(BaseAgent):
     - If the user asks something completely unrelated to finance, politely redirect them.
     - Speak directly to the user (e.g., "You spent...", "Your highest transaction...").
     """
+
+    def generate_local_fallback(self, prompt: str, schema: Optional[Type[BaseModel]] = None) -> Optional[str]:
+        """
+        Custom fallback for ChatAgent to avoid returning None.
+        """
+        return "I'm currently in **offline mode** because no `GEMINI_API_KEY` was found in the backend `.env`. I can't analyze your transactions right now, but I'll be ready once you configure the API key!"
 
     def chat(self, user_query: str, context_data: List[Dict]) -> Optional[str]:
         """
