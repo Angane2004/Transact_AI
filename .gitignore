@@ -18,6 +18,8 @@ frontend/TracAI-Mobile/
 frontend/TracAIMobileResponsive/
 
 # Large models and local DB
+models/classifier/
+models/classifier_ckpts/
 *.db
 *.onnx
 *.onnx.data
