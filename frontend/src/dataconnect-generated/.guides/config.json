@@ -1,3 +1,9 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:899949d06c5c92c7f57be737d74a1d165dcffb5f5b8c16c91ffdd504a2e48970
-size 236
+{
+  "description": "A set of guides for interacting with the generated firebase dataconnect sdk",
+  "mcpServers": {
+    "firebase": {
+      "command": "npx",
+      "args": ["-y", "firebase-tools@latest", "experimental:mcp"]
+    }
+  }
+}

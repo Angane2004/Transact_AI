@@ -1,3 +1,17 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:500724a4d4ced768d1c3e099364bd399e8b071174e1f3dc2b7c85bc12f3f40f8
-size 460
+{
+  "name": "@dataconnect/generated-react",
+  "version": "1.0.0",
+  "author": "Firebase <firebase-support@google.com> (https://firebase.google.com/)",
+  "description": "Generated SDK For example",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": " >=18.0"
+  },
+  "typings": "index.d.ts",
+  "main": "index.cjs.js",
+  "module": "esm/index.esm.js",
+  "browser": "esm/index.esm.js",
+  "peerDependencies": {
+    "@tanstack-query-firebase/react": "^2.0.0"
+  }
+}
