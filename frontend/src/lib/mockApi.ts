@@ -46,49 +46,84 @@ const categorizeTransaction = (message: string, details: any) => {
 
 // API with fallback to mock when backend is unavailable
 export const api = {
-  async post(endpoint: string, data: any) {
+  async post(endpoint: string, data: any, config?: any) {
     const session = authService.getSession();
     const userId = session?.phone?.replace(/\+/g, '')?.trim();
     
+    // Create an AbortController for timeout
+    const controller = new AbortController();
+    const timeout = config?.timeout || 30000; // Default 30s timeout
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://transact-ai.onrender.com';
+      console.log(`📡 Calling API: ${API_URL}${endpoint}`);
+      
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(userId && { 'X-User-Id': userId })
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        signal: controller.signal
       });
       
+      clearTimeout(timeoutId);
+      
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.statusText}`);
+        throw new Error(`API request failed with status ${response.status}: ${response.statusText}`);
       }
       
       const result = await response.json();
       console.log('🔗 Real API response:', result);
-      return result;
       
-    } catch (error) {
-      console.warn('⚠️ Backend unavailable, using mock API:', error);
+      // Return in axios-like format for consistency
+      return {
+        data: result,
+        status: response.status
+      };
+      
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      
+      if (error.name === 'AbortError') {
+        console.warn('⚠️ API request timed out');
+      } else {
+        console.warn('⚠️ Backend unavailable or error, using mock API:', error);
+      }
       
       const messageData = data.message || '';
       const txDetails = extractTransactionDetails(messageData);
       const category = categorizeTransaction(messageData, txDetails);
       
+      // Return mock data in the same axios-like format
+      // For /parse-sms, we need a 'parsed' field
+      const isParseSms = endpoint === '/parse-sms';
+      
       return {
-        data: {
+        data: isParseSms ? {
+          status: 'success',
+          parsed: {
+            amount: txDetails.amount,
+            merchant: txDetails.merchant,
+            type: txDetails.type,
+            confidence: txDetails.confidence,
+            category: category
+          }
+        } : {
           id: `mock_${Date.now()}`,
           category,
           amount: txDetails.amount,
           receiver: txDetails.merchant,
           type: txDetails.type,
-          status: 'completed',
+          status: 'saved',
           ai_explanation: `Transaction matches ${category} pattern.`,
           ai_suggestions: mockCategories.filter(c => c !== category).slice(0, 3),
           confidence: txDetails.confidence
         },
-        status: 'saved'
+        status: 200,
+        isMock: true
       };
     }
   }
