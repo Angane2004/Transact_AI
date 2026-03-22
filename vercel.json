@@ -1,27 +1,6 @@
 {
   "buildCommand": "cd frontend && npm run build",
-  "outputDirectory": "frontend/out",
+  "outputDirectory": "frontend/.next",
   "installCommand": "cd frontend && npm install",
-  "framework": "nextjs",
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
-    }
-  ],
-  "builds": [
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "out"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/index.html",
-      "dest": "/index.html"
-    }
-  ]
+  "framework": "nextjs"
 }
