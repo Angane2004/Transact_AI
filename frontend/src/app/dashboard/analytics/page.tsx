@@ -21,7 +21,7 @@ import {
     AreaChart,
     Area,
 } from "recharts";
-import { TrendingUp, TrendingDown, DollarSign, Calendar, Activity, IndianRupeeIcon } from "lucide-react";
+import { TrendingUp, TrendingDown, Calendar, Activity, IndianRupeeIcon } from "lucide-react";
 import { toast } from "sonner";
 import { firestoreService } from "@/lib/firestoreService";
 
@@ -146,6 +146,9 @@ export default function AnalyticsPage() {
 
             // Generate trends data (last 6 months)
             const trendsMonths: Array<{ month: string; total: number }> = [];
+            console.log("Generating 6-month trends data...");
+            console.log("All transactions count:", allTransactions.length);
+            
             for (let i = 5; i >= 0; i--) {
                 const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
                 const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
@@ -156,11 +159,17 @@ export default function AnalyticsPage() {
                 const monthTotal = monthTransactions.reduce((sum: number, t: any) => 
                     sum + (t.type === 'debit' ? t.amount : 0), 0
                 );
-                trendsMonths.push({
+                
+                const monthData = {
                     month: monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
                     total: monthTotal,
-                });
+                };
+                
+                console.log(`Month ${i}:`, monthData);
+                trendsMonths.push(monthData);
             }
+
+            console.log("Final trends data:", trendsMonths);
 
             // Set monthly data
             setMonthlyData({
@@ -536,37 +545,47 @@ export default function AnalyticsPage() {
                                 <CardDescription>Monthly spending trends over the last 6 months</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <ResponsiveContainer width="100%" height={300} className="sm:h-[350px]">
-                                    <LineChart data={trendsData.months}>
-                                        <XAxis
-                                            dataKey="month"
-                                            stroke="hsl(var(--muted-foreground))"
-                                            fontSize={12}
-                                        />
-                                        <YAxis
-                                            stroke="hsl(var(--muted-foreground))"
-                                            fontSize={12}
-                                            tickFormatter={(value) => `₹${value}`}
-                                        />
-                                        <Tooltip
-                                            contentStyle={{
-                                                backgroundColor: 'hsl(var(--background))',
-                                                border: '1px solid hsl(var(--border))',
-                                                borderRadius: '8px',
-                                            }}
-                                            formatter={(value: any) => [`₹${value.toFixed(2)}`, 'Spent']}
-                                        />
-                                        <Legend />
-                                        <Line
-                                            type="monotone"
-                                            dataKey="total"
-                                            stroke="hsl(var(--primary))"
-                                            strokeWidth={2}
-                                            dot={{ fill: "hsl(var(--primary))", r: 4 }}
-                                            activeDot={{ r: 6 }}
-                                        />
-                                    </LineChart>
-                                </ResponsiveContainer>
+                                {console.log("Rendering 6-Month Trend with data:", trendsData.months)}
+                                {trendsData.months.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height={300} className="sm:h-[350px]">
+                                        <LineChart data={trendsData.months}>
+                                            <XAxis
+                                                dataKey="month"
+                                                stroke="hsl(var(--muted-foreground))"
+                                                fontSize={12}
+                                            />
+                                            <YAxis
+                                                stroke="hsl(var(--muted-foreground))"
+                                                fontSize={12}
+                                                tickFormatter={(value) => `₹${value}`}
+                                            />
+                                            <Tooltip
+                                                contentStyle={{
+                                                    backgroundColor: 'hsl(var(--background))',
+                                                    border: '1px solid hsl(var(--border))',
+                                                    borderRadius: '8px',
+                                                }}
+                                                formatter={(value: any) => [`₹${value.toFixed(2)}`, 'Spent']}
+                                            />
+                                            <Legend />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="total"
+                                                stroke="hsl(var(--primary))"
+                                                strokeWidth={2}
+                                                dot={{ fill: "hsl(var(--primary))", r: 4 }}
+                                                activeDot={{ r: 6 }}
+                                            />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                                        <div className="text-center">
+                                            <p className="text-sm">No trend data available</p>
+                                            <p className="text-xs mt-1">Add transactions to see spending trends</p>
+                                        </div>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </motion.div>

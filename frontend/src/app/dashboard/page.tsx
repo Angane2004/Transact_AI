@@ -47,8 +47,16 @@ export default function DashboardPage() {
     const [timePeriod, setTimePeriod] = useState<TimePeriod>("today");
     const [categories, setCategories] = useState<string[]>([]);
     const [showCategories, setShowCategories] = useState(false);
+    
+    // Debug categories state changes
+    useEffect(() => {
+        console.log("Dashboard categories state updated:", categories);
+        console.log("Categories length:", categories?.length);
+    }, [categories]);
     const [showPinReminder, setShowPinReminder] = useState(false);
     const [pendingTransaction, setPendingTransaction] = useState<any>(null);
+    const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+    const [aiExplanation, setAiExplanation] = useState<string>("");
     const { theme } = useTheme();
     const { density, getDensityClasses } = useDensity();
     const densityClasses = getDensityClasses();
@@ -124,14 +132,23 @@ export default function DashboardPage() {
             const pending = allFetchedTransactions.find((t: any) => t.status === 'pending');
             if (pending) {
                 setPendingTransaction(pending);
+                // Get AI suggestions for this transaction
+                getAiSuggestions(pending);
             } else {
                 setPendingTransaction(null);
+                setAiSuggestions([]);
+                setAiExplanation("");
             }
 
             // 2. Fetch Categories from Firestore
+            console.log("=== Fetching Categories ===");
             const catRes = await firestoreService.getCategories(userId);
+            console.log("Categories API response:", catRes);
             const fetchedCategories = catRes.success ? catRes.data : [];
+            console.log("Fetched categories:", fetchedCategories);
+            console.log("Setting categories state to:", fetchedCategories);
             setCategories(fetchedCategories);
+            console.log("=== Categories Fetch Complete ===");
 
             // 3. Calculate Summary Locally from ALL fetched transactions for accuracy
             const totalSpent = allFetchedTransactions
@@ -139,11 +156,51 @@ export default function DashboardPage() {
                 .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
             
             const categorySummary: Record<string, number> = {};
+            const dailyBreakdown: Record<string, number> = {};
+            
             allFetchedTransactions.forEach((t: any) => {
                 if (t.category && t.type === 'debit') {
                     categorySummary[t.category] = (categorySummary[t.category] || 0) + (t.amount || 0);
                 }
+                
+                // Calculate daily breakdown from actual transactions
+                if (t.type === 'debit' && (t.date || t.createdAt || t.timestamp)) {
+                    // Handle different date formats (date, createdAt, timestamp)
+                    let transactionDate: Date;
+                    if (t.date) {
+                        transactionDate = new Date(t.date);
+                    } else if (t.createdAt) {
+                        transactionDate = new Date(t.createdAt);
+                    } else if (t.timestamp) {
+                        transactionDate = new Date(t.timestamp);
+                    } else {
+                        return; // Skip if no date available
+                    }
+                    
+                    // Check if date is valid
+                    if (isNaN(transactionDate.getTime())) {
+                        console.warn("Invalid date for transaction:", t);
+                        return;
+                    }
+                    
+                    const date = transactionDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+                    const amount = parseFloat(t.amount) || 0;
+                    if (amount > 0) {
+                        dailyBreakdown[date] = (dailyBreakdown[date] || 0) + amount;
+                    }
+                }
             });
+
+            // Convert daily breakdown to array format for charts
+            const dailyBreakdownArray = Object.entries(dailyBreakdown)
+                .map(([date, total]) => ({ date, total }))
+                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+            // Debug logging
+            console.log("Daily breakdown calculated:", dailyBreakdownArray);
+            console.log("Category summary:", categorySummary);
+            console.log("Total transactions:", allFetchedTransactions.length);
+            console.log("Debit transactions:", allFetchedTransactions.filter(t => t.type === 'debit').length);
 
             const sortedCategories = Object.entries(categorySummary).sort((a: any, b: any) => b[1] - a[1]);
             const highestCat = sortedCategories.length > 0 ? sortedCategories[0][0] : "N/A";
@@ -153,6 +210,7 @@ export default function DashboardPage() {
                 total_transactions: allFetchedTransactions.length,
                 category_summary: categorySummary,
                 highest_spending_category: highestCat,
+                daily_breakdown: dailyBreakdownArray,
             };
 
             setSummary(newSummary);
@@ -189,8 +247,15 @@ export default function DashboardPage() {
     useSmsListener(fetchData);
 
     const handleCategoryAdded = useCallback(() => {
-        fetchData(true);
-    }, [fetchData]);
+        console.log("=== handleCategoryAdded Called ===");
+        console.log("Current categories before refresh:", categories);
+        console.log("Calling fetchData(true) to refresh categories...");
+        
+        // Small delay to allow Firestore to propagate the write before we fetch
+        setTimeout(() => {
+            fetchData(true);
+        }, 500);
+    }, [fetchData, categories]);
 
     const handleTransactionAdded = useCallback(() => {
         // Small delay to allow Firestore to propagate the write before we fetch
@@ -198,6 +263,26 @@ export default function DashboardPage() {
             fetchData(true);
         }, 800);
     }, [fetchData]);
+
+    const getAiSuggestions = async (transaction: any) => {
+        try {
+            const response = await api.post("/classify", { 
+                message: `${transaction.receiver || transaction.description} - ₹${transaction.amount}`
+            });
+            
+            if (response.data.suggestions) {
+                setAiSuggestions(response.data.suggestions);
+            }
+            if (response.data.explanation) {
+                setAiExplanation(response.data.explanation);
+            }
+        } catch (error) {
+            console.error("Failed to get AI suggestions:", error);
+            // Set some default suggestions
+            setAiSuggestions(["Food", "Transport", "Shopping", "Entertainment"]);
+            setAiExplanation("AI couldn't analyze this transaction. Please select a category manually.");
+        }
+    };
 
     const handleCategorized = async (category: string) => {
         if (!pendingTransaction) return;
@@ -396,7 +481,13 @@ export default function DashboardPage() {
                         amount={pendingTransaction.amount || 0}
                         receiver={pendingTransaction.receiver || pendingTransaction.description || "Unknown"}
                         onCategorized={handleCategorized}
-                        onDismiss={() => setPendingTransaction(null)}
+                        onDismiss={() => {
+                            setPendingTransaction(null);
+                            setAiSuggestions([]);
+                            setAiExplanation("");
+                        }}
+                        ai_suggestions={aiSuggestions}
+                        ai_explanation={aiExplanation}
                     />
                 )}
             </AnimatePresence>
@@ -404,8 +495,16 @@ export default function DashboardPage() {
             {/* Categories Dialog */}
             <CategoriesDialog
                 open={showCategories}
-                onOpenChange={setShowCategories}
+                onOpenChange={(open) => {
+                    setShowCategories(open);
+                    // Force refresh categories when opening dialog
+                    if (open) {
+                        console.log("CategoriesDialog opening - forcing refresh");
+                        fetchData(true);
+                    }
+                }}
                 categories={categories}
+                categorySummary={summary?.category_summary || {}}
             />
 
             <motion.div
@@ -504,7 +603,11 @@ export default function DashboardPage() {
                 <motion.div variants={item}>
                     <Card
                         className="hover:shadow-xl transition-all duration-300 border-l-4 border-l-orange-500 dark:border-l-orange-400 cursor-pointer"
-                        onClick={() => setShowCategories(!showCategories)}
+                        onClick={() => {
+                        console.log("View All Categories clicked!");
+                        console.log("Current categories before opening:", categories);
+                        setShowCategories(!showCategories);
+                    }}
                     >
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -553,7 +656,11 @@ export default function DashboardPage() {
                 transition={{ delay: 0.3 }}
                 className="grid gap-4"
             >
-                <TransactionList transactions={transactions} />
+                <TransactionList 
+    transactions={transactions} 
+    categories={categories}
+    onTransactionCategorized={() => fetchData(true)}
+/>
             </motion.div>
         </div>
     );

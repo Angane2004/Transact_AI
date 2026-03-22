@@ -87,6 +87,7 @@ export function AddCategoryDialog({ onCategoryAdded }: { onCategoryAdded?: () =>
                 toast.success("Category added successfully");
                 setCategory("");
                 setOpen(false);
+                console.log("Category added successfully, calling onCategoryAdded callback");
                 onCategoryAdded?.();
             }
         } catch (error: any) {

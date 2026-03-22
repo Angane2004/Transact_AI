@@ -191,13 +191,24 @@ export const firestoreService = {
 
     // Category Operations
     async saveCategory(userId: string, category: string) {
-        if (isSimulationMode || !firestore) return { success: false };
+        if (isSimulationMode || !firestore) {
+            // Use localStorage in simulation mode
+            try {
+                console.log("📱 Saving category to localStorage:", category);
+                const { categoryService } = require("./localStorageService");
+                categoryService.add(category, userId);
+                console.log("📱 Category saved to localStorage successfully");
+                return { success: true };
+            } catch (error) {
+                console.error("localStorage save category error:", error);
+                return { success: false };
+            }
+        }
+        
         try {
             const catRef = docFn(firestore, "users", userId, "categories", category);
-            await setDocFn(catRef, {
-                name: category,
-                createdAt: Timestamp?.now() || new Date().toISOString(),
-            });
+            const firestoreModule = require("firebase/firestore");
+            await firestoreModule.setDoc(catRef, { name: category, createdAt: firestoreModule.Timestamp?.now() || new Date().toISOString() });
             return { success: true };
         } catch (error) {
             console.error("❌ Firestore category save error:", error);
@@ -206,17 +217,32 @@ export const firestoreService = {
     },
 
     async getCategories(userId: string): Promise<{ success: boolean; data: string[]; error?: string }> {
-        if (isSimulationMode || !firestore) return { success: false, data: [], error: "Not initialized" };
+        if (isSimulationMode || !firestore) {
+            // Use localStorage in simulation mode
+            try {
+                console.log("📱 Using localStorage for categories in simulation mode");
+                const { categoryService } = require("./localStorageService");
+                const categories = categoryService.getAll(userId);
+                console.log("📱 localStorage categories:", categories);
+                // Extract just the category names
+                const categoryNames = categories.map((cat: any) => cat.name);
+                console.log("📱 localStorage category names:", categoryNames);
+                return { success: true, data: categoryNames };
+            } catch (error) {
+                console.error("localStorage categories error:", error);
+                return { success: false, data: [], error: "localStorage error" };
+            }
+        }
+        
         try {
             const firestoreModule = require("firebase/firestore");
             const categoriesRef = collectionFn(firestore, "users", userId, "categories");
-            const q = firestoreModule.query(categoriesRef, firestoreModule.orderBy("createdAt", "desc"));
-            const querySnapshot = await getDocsFn(q);
-            const categories = querySnapshot.docs.map((doc: any) => doc.data().name);
+            const snapshot = await firestoreModule.getDocs(categoriesRef);
+            const categories = snapshot.docs.map((doc: any) => doc.data().name);
             return { success: true, data: categories };
-        } catch (error: any) {
-            console.error("❌ Firestore categories get error:", error);
-            return { success: false, data: [], error: error.message };
+        } catch (error) {
+            console.error("Firestore categories error:", error);
+            return { success: false, data: [], error: "Firestore error" };
         }
     },
 
