@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: 'standalone',  // Use standalone output for Vercel
+  output: 'export',  // Create 'out' directory for Vercel
   
   // Disable ESLint during builds to fix deployment issues
   eslint: {
