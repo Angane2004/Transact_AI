@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 
 import axios from "axios";
-import { api } from "@/lib/api";
+import { api } from "@/lib/mockApi"; // Use mock API for production
 import { authService, transactionService, type Transaction } from "@/lib/localStorageService";
 import { firestoreService } from "@/lib/firestoreService";
 
