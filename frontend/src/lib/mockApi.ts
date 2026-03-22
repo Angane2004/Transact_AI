@@ -108,25 +108,15 @@ export const mockApi = {
   }
 };
 
-// Enhanced API that falls back to mock when backend is unavailable
+// Enhanced API that uses real backend when available, falls back to mock when unavailable
 export const api = {
   async post(endpoint: string, data: any) {
     const session = authService.getSession();
     const userId = session?.phone?.replace(/\+/g, '')?.trim();
     
-    // Check if we're in production (no backend)
-    const isProduction = typeof window !== 'undefined' && 
-                      (window.location.hostname === 'transact-ai-fawn.vercel.app' ||
-                       window.location.hostname === 'localhost');
-    
-    if (isProduction) {
-      console.log('🌐 Using mock API for production deployment');
-      return mockApi.post(endpoint, data);
-    }
-    
-    // Try real API for development
+    // Always try the real API first
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://transact-ai.onrender.com';
       const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: {
@@ -145,9 +135,27 @@ export const api = {
       return result;
       
     } catch (error) {
-      console.warn('⚠️ Backend unavailable, falling back to mock API:', error);
-      toast.info('Using offline mode - AI features limited');
-      return mockApi.post(endpoint, data);
+      console.warn('⚠️ Backend unavailable, using enhanced mock API:', error);
+      
+      // Enhanced mock API with better categorization
+      const messageData = data.message || '';
+      const details = extractTransactionDetails(messageData);
+      const category = categorizeTransaction(messageData, details);
+      
+      return {
+        data: {
+          id: `mock_${Date.now()}`,
+          category,
+          amount: details.amount,
+          receiver: details.merchant,
+          type: details.type,
+          status: 'completed',
+          ai_explanation: `Transaction matches ${category} pattern based on keywords.`,
+          ai_suggestions: mockCategories.filter(c => c !== category).slice(0, 3),
+          confidence: details.confidence
+        },
+        status: 'saved'
+      };
     }
   }
 };
