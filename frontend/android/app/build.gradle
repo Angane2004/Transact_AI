@@ -7,6 +7,8 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
+        options.compilerArgs << "-Xlint:-deprecation"
+        options.compilerArgs << "-Xlint:-unchecked"
     }
     
     defaultConfig {
@@ -20,6 +22,14 @@ android {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+        packagingOptions {
+            exclude 'META-INF/DEPENDENCIES'
+            exclude 'META-INF/LICENSE'
+            exclude 'META-INF/LICENSE.txt'
+            exclude 'META-INF/NOTICE'
+            exclude 'META-INF/NOTICE.txt'
+            exclude 'META-INF/*.kotlin_module'
         }
     }
     buildTypes {
@@ -42,8 +52,6 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-ktx:$androidxCoreKtxVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
-    implementation "javax.xml.bind:jaxb-api:$jaxbApiVersion"
-    implementation "org.glassfish.jaxb:jaxb-runtime:$jaxbImplVersion"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
