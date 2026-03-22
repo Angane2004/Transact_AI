@@ -6,17 +6,24 @@ import BackgroundPattern from "@/components/BackgroundPattern";
 import GlobalBackground from "@/components/GlobalBackground";
 import { ThemeProvider } from "@/components/theme-provider";
 
-const ubuntu = Ubuntu({
-  variable: "--font-ubuntu",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "700"],
-});
+/** Set in GitHub Actions (APK build) to avoid flaky fonts.gstatic.com fetches on the runner. */
+const skipGoogleFonts = process.env.SKIP_GOOGLE_FONT_DOWNLOAD === "true";
 
-const ubuntuMono = Ubuntu_Mono({
-  variable: "--font-ubuntu-mono",
-  subsets: ["latin"],
-  weight: ["400", "700"],
-});
+const ubuntu = skipGoogleFonts
+  ? { variable: "", className: "" }
+  : Ubuntu({
+      variable: "--font-ubuntu",
+      subsets: ["latin"],
+      weight: ["300", "400", "500", "700"],
+    });
+
+const ubuntuMono = skipGoogleFonts
+  ? { variable: "", className: "" }
+  : Ubuntu_Mono({
+      variable: "--font-ubuntu-mono",
+      subsets: ["latin"],
+      weight: ["400", "700"],
+    });
 
 export const metadata: Metadata = {
   title: "TransactAI",
@@ -29,9 +36,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={skipGoogleFonts ? "ci-system-fonts" : undefined}
+    >
       <body
-        className={`${ubuntu.variable} ${ubuntuMono.variable} antialiased`}
+        className={[ubuntu.variable, ubuntuMono.variable, "antialiased"].filter(Boolean).join(" ")}
       >
         <ThemeProvider
           attribute="class"

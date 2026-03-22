@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Used when SKIP_GOOGLE_FONT_DOWNLOAD=true (e.g. GitHub Actions APK build) */
+.ci-system-fonts {
+  --font-ubuntu: ui-sans-serif, system-ui, sans-serif;
+  --font-ubuntu-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
