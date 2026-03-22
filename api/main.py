@@ -42,6 +42,7 @@ else:
         "http://localhost:3001",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
+        "https://trancatai.netlify.app",
         # Add your production domain via ALLOWED_ORIGINS environment variable
     ]
 
