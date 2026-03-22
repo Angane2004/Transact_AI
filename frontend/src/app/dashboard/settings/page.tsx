@@ -26,6 +26,10 @@ import {
   LayoutDashboard,
   RefreshCw,
   Trash2,
+  Zap,
+  Globe,
+  Copy,
+  Smartphone,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -624,6 +628,88 @@ export default function SettingsPage() {
                     ? "Clearing local data..."
                     : "Clear TransactAI data on this device"}
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Automation & Webhooks */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="col-span-1"
+        >
+          <Card className="h-full border border-border/60 shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-background via-background to-blue-50/40 dark:to-blue-950/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Zap className="h-5 w-5 text-blue-500" />
+                Real-time Automation
+              </CardTitle>
+              <CardDescription>
+                Sync bank SMS automatically using MacroDroid or Tasker.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-0">
+              <div className="bg-muted/50 rounded-lg p-3 text-[13px] font-mono break-all space-y-2 border border-border/40">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground font-sans">Webhook URL:</span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
+                    navigator.clipboard.writeText("https://transact-ai.onrender.com/webhook/sms");
+                    toast.success("URL copied!");
+                  }}>
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                </div>
+                <div className="text-primary">https://transact-ai.onrender.com/webhook/sms</div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <Smartphone className="h-4 w-4 text-blue-500" />
+                  MacroDroid Step-by-Step Guide:
+                </h4>
+                <div className="text-xs text-muted-foreground space-y-3">
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">1. Add Macro</p>
+                    <p>Open MacroDroid &rarr; <strong>Add Macro</strong> &rarr; Name it "TransactAI Sync".</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">2. Trigger (+)</p>
+                    <p>Search <strong>"SMS Received"</strong> &rarr; Select your Bank's Sender ID (e.g. HDFCBK) or <strong>Any Number</strong>.</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">3. Action (+)</p>
+                    <p>Search <strong>"HTTP Request"</strong> &rarr; Select <strong>POST</strong> method.</p>
+                  </div>
+                  <div className="space-y-2 pl-2 border-l-2 border-primary/20">
+                    <div className="flex items-center justify-between group">
+                      <p>Header: <code className="bg-muted px-1 italic text-primary">X-User-Id</code></p>
+                      <Button variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => {
+                        navigator.clipboard.writeText(authService.getSession()?.phone.replace(/\+/g, "") || "91...");
+                        toast.success("ID copied!");
+                      }}>
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between group">
+                      <p>Body (JSON): click (...) to select <code className="bg-muted px-1 italic">{"{\"message\": \"[sms_message]\"}"}</code></p>
+                      <Button variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => {
+                        navigator.clipboard.writeText("{\"message\": \"[sms_message]\"}");
+                        toast.success("JSON Body copied!");
+                      }}>
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t">
+                <p className="text-[11px] text-muted-foreground italic flex items-center gap-1.5 leading-tight">
+                  <LayoutDashboard className="h-3 w-3" />
+                  Once saved, every bank SMS will be categorized instantly by your AI on Render and sync to your dashboard.
+                </p>
               </div>
             </CardContent>
           </Card>
