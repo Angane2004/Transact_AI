@@ -332,7 +332,7 @@ export default function DashboardPage() {
                     <Button 
                         variant="outline" 
                         size="icon" 
-                        onClick={() => void fetchData()} 
+                        onClick={() => fetchData(true)} 
                         disabled={loading}
                         className="rounded-full shadow-sm hover:bg-primary/5 hover:border-primary/50 transition-all"
                     >

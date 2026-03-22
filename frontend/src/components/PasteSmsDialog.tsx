@@ -8,6 +8,7 @@ import { Loader2, Sparkles, Check, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 
+import axios from "axios";
 import { api } from "@/lib/api";
 import { authService, transactionService, type Transaction } from "@/lib/localStorageService";
 import { firestoreService } from "@/lib/firestoreService";
@@ -35,7 +36,15 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
       toast.success("AI parsed the SMS successfully!");
     } catch (error) {
       console.error(error);
-      toast.error("AI couldn't parse this message. Make sure GEMINI_API_KEY is set or local model is active.");
+      let detail =
+        "Could not reach your API. On Netlify set NEXT_PUBLIC_API_URL to your Render backend; add that URL to Render ALLOWED_ORIGINS.";
+      if (axios.isAxiosError(error)) {
+        const d = error.response?.data?.detail;
+        if (typeof d === "string") detail = d;
+        else if (error.code === "ECONNABORTED") detail = "Request timed out — try again.";
+        else if (!error.response) detail = "Network error — check API URL and CORS on the backend.";
+      }
+      toast.error(detail);
     } finally {
       setLoading(false);
     }

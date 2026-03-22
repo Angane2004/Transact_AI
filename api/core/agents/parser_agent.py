@@ -125,13 +125,39 @@ class ParserAgent(BaseAgent):
             # Ensure we return at least a default schema instead of None to avoid 500
             return ParsedTransactionSchema(merchant="Error in Parsing", type="debit")
 
-    def parse(self, text: str) -> Optional[ParsedTransactionSchema]:
+    def fallback_parse(self, text: str) -> ParsedTransactionSchema:
+        """
+        Last-resort parse without Gemini (amount + merchant from shared preprocessors).
+        Used when API key is missing, quota exceeded, or Gemini returns nothing.
+        """
+        from core.preprocessor import extract_amount, extract_recipient
+
+        lower = text.lower()
+        tx_type = "credit" if any(
+            w in lower for w in ("credited", "received", "deposited", "credit to")
+        ) else "debit"
+        amt = extract_amount(text)
+        merch = extract_recipient(text) or "Unknown"
+        return ParsedTransactionSchema(
+            amount=amt,
+            type=tx_type,
+            merchant=merch,
+        )
+
+    def parse(self, text: str) -> ParsedTransactionSchema:
         """
         Parses raw text into a ParsedTransactionSchema.
+        Prefer Gemini when configured; otherwise regex/heuristic paths inside generate_structured.
+        Always returns a schema (never None) so /parse-sms works without GEMINI_API_KEY.
         """
         response = self.generate_structured(
             prompt=text,
             schema=ParsedTransactionSchema,
-            system_instruction=self.SYSTEM_INSTRUCTION
+            system_instruction=self.SYSTEM_INSTRUCTION,
         )
-        return response
+        if response is not None:
+            return response
+        fb = self.generate_local_fallback(text, ParsedTransactionSchema)
+        if fb is not None:
+            return fb
+        return self.fallback_parse(text)

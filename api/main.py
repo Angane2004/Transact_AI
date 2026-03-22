@@ -343,14 +343,8 @@ class ParseSmsRequest(BaseModel):
 def parse_sms(request: ParseSmsRequest):
     if not request.message:
         raise HTTPException(status_code=400, detail="Missing message")
-    
-    if not parser_agent.is_enabled():
-        raise HTTPException(status_code=503, detail="Parser Agent (Gemini) is not enabled.")
-        
+    # Uses Gemini when GEMINI_API_KEY is set; otherwise regex + extract_amount/extract_recipient
     result = parser_agent.parse(request.message)
-    if not result:
-        raise HTTPException(status_code=500, detail="Failed to parse message")
-        
     return {"status": "success", "parsed": result.model_dump()}
 
 @app.get("/anomalies")
