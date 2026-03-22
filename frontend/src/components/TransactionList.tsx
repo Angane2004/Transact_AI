@@ -9,7 +9,8 @@ import { Transaction } from "@/lib/localStorageService";
 import { motion } from "framer-motion";
 import { IndianRupee, Tag, Edit3 } from "lucide-react";
 import { toast } from "sonner";
-import { firestoreService, authService } from "@/lib/localStorageService";
+import { firestoreService } from "@/lib/firestoreService";
+import { authService } from "@/lib/localStorageService";
 
 interface TransactionListProps {
     transactions: any[];

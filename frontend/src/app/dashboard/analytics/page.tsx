@@ -545,7 +545,10 @@ export default function AnalyticsPage() {
                                 <CardDescription>Monthly spending trends over the last 6 months</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                {console.log("Rendering 6-Month Trend with data:", trendsData.months)}
+                                {(() => {
+                                    console.log("Rendering 6-Month Trend with data:", trendsData.months);
+                                    return null;
+                                })()}
                                 {trendsData.months.length > 0 ? (
                                     <ResponsiveContainer width="100%" height={300} className="sm:h-[350px]">
                                         <LineChart data={trendsData.months}>
