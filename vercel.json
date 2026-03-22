@@ -17,5 +17,11 @@
         "distDir": "out"
       }
     }
+  ],
+  "routes": [
+    {
+      "src": "/index.html",
+      "dest": "/index.html"
+    }
   ]
 }
