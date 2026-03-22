@@ -1,0 +1,41 @@
+MANUAL APK BUILD - Step by Step
+
+If scripts don't work, run these commands manually:
+
+STEP 1: Create web files
+------------------------
+mkdir out (if it doesn't exist)
+
+Create out\index.html with this content:
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TransactAI</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+    <h1>TransactAI Mobile</h1>
+    <p>Loading...</p>
+</body>
+</html>
+
+STEP 2: Sync with Capacitor
+---------------------------
+npx cap sync android --force
+
+STEP 3: Build APK
+-----------------
+cd android
+gradlew.bat assembleDebug --parallel --no-daemon
+
+STEP 4: Find APK
+----------------
+APK will be at:
+android\app\build\outputs\apk\debug\app-debug.apk
+
+ALTERNATIVE: Use batch file
+-------------------------
+Just run: build-apk.bat
+
+This batch file has no emojis and should work on any Windows system.

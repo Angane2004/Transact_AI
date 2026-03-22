@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { pinService, authService, initializeData, biometricService } from "@/lib/localStorageService";
 import { firestoreService } from "@/lib/firestoreService";
@@ -360,29 +361,50 @@ export default function SettingsPage() {
                         className="space-y-3 pt-2"
                     >
                         <Label className="text-sm font-medium">Biometric Type</Label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {(["fingerprint", "face", "both"] as const).map((t) => (
-                                <Button
-                                    key={t}
-                                    variant={biometricType === t ? "default" : "outline"}
-                                    size="sm"
-                                    className="capitalize text-[11px] h-9"
-                                    onClick={() => {
-                                        setBiometricType(t);
-                                        // Update service if already enabled
-                                        const session = authService.getSession();
-                                        const userId = session?.phone.replace(/\+/g, "") || "default";
-                                        biometricService.save({
-                                            enabled: true,
-                                            type: t,
-                                            updatedAt: new Date().toISOString()
-                                        }, userId);
-                                    }}
-                                >
-                                    {t}
-                                </Button>
-                            ))}
-                        </div>
+                        <Select
+                            value={biometricType}
+                            onValueChange={(value: "face" | "fingerprint" | "both") => {
+                                setBiometricType(value);
+                                // Update service if already enabled
+                                const session = authService.getSession();
+                                const userId = session?.phone.replace(/\+/g, "") || "default";
+                                biometricService.save({
+                                    enabled: true,
+                                    type: value,
+                                    updatedAt: new Date().toISOString()
+                                }, userId);
+                            }}
+                        >
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select biometric type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="fingerprint">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-4 h-4 rounded-full bg-blue-100 flex items-center justify-center">
+                                            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                                        </div>
+                                        Fingerprint
+                                    </div>
+                                </SelectItem>
+                                <SelectItem value="face">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-4 h-4 rounded-full bg-green-100 flex items-center justify-center">
+                                            <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                                        </div>
+                                        Face Recognition
+                                    </div>
+                                </SelectItem>
+                                <SelectItem value="both">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-4 h-4 rounded-full bg-purple-100 flex items-center justify-center">
+                                            <div className="w-2 h-2 bg-purple-600 rounded-full"></div>
+                                        </div>
+                                        Both Available
+                                    </div>
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                     </motion.div>
                 )}
               </div>

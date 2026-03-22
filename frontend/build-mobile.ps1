@@ -41,25 +41,25 @@ try {
 $debugApk = "app\build\outputs\apk\debug\app-debug.apk"
 if (Test-Path $debugApk) {
     $apkPath = Resolve-Path $debugApk
-    Write-Host "📱 APK Location: $apkPath" -ForegroundColor Cyan
+    Write-Host "APK Location: $apkPath" -ForegroundColor Cyan
     
     $apkSize = (Get-Item $debugApk).Length / 1MB
-    Write-Host "📊 APK Size: $([math]::Round($apkSize, 2)) MB" -ForegroundColor Cyan
+    Write-Host "APK Size: $([math]::Round($apkSize, 2)) MB" -ForegroundColor Cyan
     
     Write-Host ""
-    Write-Host "🎉 Mobile build completed successfully!" -ForegroundColor Green
+    Write-Host "Mobile build completed successfully!" -ForegroundColor Green
     Write-Host ""
-    Write-Host "📋 Next steps:" -ForegroundColor Yellow
+    Write-Host "Next steps:" -ForegroundColor Yellow
     Write-Host "1. Transfer the APK to your Android device" -ForegroundColor White
     Write-Host "2. Enable 'Install from unknown sources' in settings" -ForegroundColor White
-    Write-Host "3. Install the APK and test SMS & biometric features" -ForegroundColor White
+    Write-Host "3. Install the APK and test SMS and biometric features" -ForegroundColor White
     Write-Host ""
-    Write-Host "🔧 To build release APK, run:" -ForegroundColor Cyan
+    Write-Host "To build release APK, run:" -ForegroundColor Cyan
     Write-Host "   cd android && .\gradlew.bat assembleRelease" -ForegroundColor Gray
 } else {
-    Write-Host "❌ APK file not found after build" -ForegroundColor Red
+    Write-Host "APK file not found after build" -ForegroundColor Red
 }
 
 # Return to frontend directory
 Set-Location ..
-Write-Host "📍 Returned to frontend directory" -ForegroundColor Cyan
+Write-Host "Returned to frontend directory" -ForegroundColor Cyan
