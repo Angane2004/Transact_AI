@@ -217,6 +217,7 @@ def classify(payload: Dict, db: Session = Depends(get_db), user_id: str = Depend
     except Exception as e:
         db.rollback()
         print(f"Failed to save transaction to DB: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save transaction to database")
 
     # Determine response status based on confidence
     if conf >= 0.6:
@@ -226,20 +227,25 @@ def classify(payload: Dict, db: Session = Depends(get_db), user_id: str = Depend
             "confidence": float(conf),
             "amount": amount,
             "receiver": receiver,
+            "type": "debit",
+            "id": str(txn.id),
             "is_anomaly": is_anomaly,
-            "anomaly_reason": anomaly_reason
+            "anomaly_reason": anomaly_reason,
         }
 
-    # Call Confidence Agent to explain low confidence for the UI toast/warning
+    # Optional extra Gemini call — disabled by default (avoids 60s+ timeouts on cold hosts)
     ai_explanation = None
     ai_suggestions = []
-    if confidence_agent.is_enabled():
-        explanation_result = confidence_agent.explain(
-            text=text, amount=amount, predicted=cat, categories=CATEGORIES
-        )
-        if explanation_result:
-            ai_explanation = explanation_result.explanation
-            ai_suggestions = explanation_result.suggestions
+    if os.getenv("CONFIDENCE_EXPLAIN", "").lower() in ("1", "true", "yes") and confidence_agent.is_enabled():
+        try:
+            explanation_result = confidence_agent.explain(
+                text=text, amount=amount, predicted=cat, categories=CATEGORIES
+            )
+            if explanation_result:
+                ai_explanation = explanation_result.explanation
+                ai_suggestions = explanation_result.suggestions
+        except Exception as e:
+            print(f"Confidence explain skipped: {e}")
 
     return {
         "status": "low_confidence",
@@ -248,11 +254,13 @@ def classify(payload: Dict, db: Session = Depends(get_db), user_id: str = Depend
         "allow_new_category": True,
         "amount": amount,
         "receiver": receiver,
+        "type": "debit",
+        "id": str(txn.id),
         "clean_text": cleaned,
         "raw_text": text,
         "ai_explanation": ai_explanation,
         "ai_suggestions": ai_suggestions,
-        "category": cat
+        "category": cat,
     }
 
 # ============================================================
@@ -344,62 +352,6 @@ def parse_sms(request: ParseSmsRequest):
         raise HTTPException(status_code=500, detail="Failed to parse message")
         
     return {"status": "success", "parsed": result.model_dump()}
-
-@app.post("/classify")
-def classify(request: ParseSmsRequest, db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
-    if not request.message:
-        raise HTTPException(status_code=400, detail="Missing message")
-
-    import time
-    # Small delay to prevent ResourceExhausted if called in rapid succession
-    time.sleep(1)
-
-    # 1. Parse SMS using Gemini Parser Agent
-    parsed = parser_agent.parse(request.message)
-    if not parsed:
-        # Fallback to simple regex/logic if Gemini fails
-        from core.preprocessor import extract_amount, extract_recipient
-        parsed_data = {
-            "amount": extract_amount(request.message),
-            "merchant": extract_recipient(request.message),
-            "category": "Uncategorized",
-            "type": "debit"
-        }
-    else:
-        parsed_data = parsed.model_dump()
-
-    # 2. Check confidence using Confidence Agent
-    is_low_confidence = False
-    if confidence_agent.is_enabled():
-        is_low_confidence = not confidence_agent.is_confident(request.message, parsed_data.get("category", "Uncategorized"))
-
-    # 3. Save to local DB
-    new_txn = Transaction(
-        raw_text=request.message,
-        amount=parsed_data.get("amount", 0.0),
-        predicted_category=parsed_data.get("category", "Uncategorized"),
-        receiver_name=parsed_data.get("merchant", "Unknown"),
-        user_id=user_id,
-        confidence=0.4 if is_low_confidence else 0.9,
-        is_anomaly=False
-    )
-    
-    try:
-        db.add(new_txn)
-        db.commit()
-        db.refresh(new_txn)
-    except Exception as e:
-        db.rollback()
-        print(f"Error saving pasted transaction: {e}")
-        raise HTTPException(status_code=500, detail="Failed to save transaction to database")
-
-    return {
-        "status": "low_confidence" if is_low_confidence else "saved",
-        "category": new_txn.predicted_category,
-        "amount": new_txn.amount,
-        "receiver": new_txn.receiver_name,
-        "id": str(new_txn.id)
-    }
 
 @app.get("/anomalies")
 def get_anomalies(db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):

@@ -3,59 +3,79 @@
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { authService } from '@/lib/localStorageService';
+import { authService, transactionService, type Transaction } from '@/lib/localStorageService';
 import { firestoreService } from '@/lib/firestoreService';
 
 export function useSmsListener(onTransactionAdded: () => void) {
   useEffect(() => {
-    // This event is triggered from the Native Android side (MainActivity.java)
-    const handleSmsEvent = async (event: any) => {
+    // Dispatched from MainActivity.java (Capacitor) when SMS_RECEIVED fires
+    const handleSmsEvent = async (event: Event) => {
       try {
-        // The native side sends a JSON string
-        const data = typeof event.detail === 'string' ? JSON.parse(event.detail) : event.detail;
+        const raw = (event as CustomEvent).detail;
+        const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
         const { message, sender } = data;
 
-        console.log("📨 Real-time SMS detectada:", message, "from:", sender);
-        
+        console.log("📨 SMS received:", message?.slice?.(0, 80), "from:", sender);
+
         const session = authService.getSession();
         const userId = session?.phone.replace(/\+/g, '').trim();
-        if (!userId) return;
+        if (!userId) {
+          toast.warning('Sign in so real-time SMS can be saved to your account.');
+          return;
+        }
 
         toast.promise(
             (async () => {
-                const res = await api.post("/classify", { message });
+                const res = await api.post("/classify", { message }, { timeout: 120000 });
                 const result = res.data;
 
                 if (result.status === "saved" || result.status === "low_confidence") {
                     const isLow = result.status === "low_confidence";
-                    
+                    const txnId = result.id ? String(result.id) : `txn_${Date.now()}`;
+                    const amount = typeof result.amount === "number" ? result.amount : 0;
+                    const receiver = result.receiver || sender || "Unknown";
+
+                    const localTxn: Transaction = {
+                      id: txnId,
+                      description: message,
+                      amount,
+                      category: result.category,
+                      date: new Date().toISOString(),
+                      recipient: receiver,
+                      type: (result.type as "debit" | "credit") || "debit",
+                      status: isLow ? "pending" : "completed",
+                      ai_explanation: result.ai_explanation,
+                      ai_suggestions: result.ai_suggestions,
+                    };
+                    transactionService.save(localTxn, userId);
+
                     await firestoreService.saveTransaction(userId, {
-                        id: `txn_${Date.now()}`,
+                        id: txnId,
                         description: message,
-                        amount: result.amount || 0,
+                        amount,
                         category: result.category,
                         date: new Date().toISOString(),
-                        receiver: result.receiver || sender || "Unknown",
+                        receiver,
                         type: result.type || "debit",
                         status: isLow ? "pending" : "completed"
                     });
-                    
+
                     onTransactionAdded();
-                    return result.status === "saved" 
-                        ? `Auto-saved transaction from ${sender}` 
-                        : `Received transaction from ${sender}. Please categorize.`;
+                    return result.status === "saved"
+                        ? `Saved from ${sender || "SMS"}`
+                        : `Saved (low confidence) from ${sender || "SMS"} — review or recategorize.`;
                 }
-                throw new Error("Not a transaction message");
+                throw new Error("Unexpected classify response");
             })(),
             {
-                loading: 'Processing real-time SMS...',
+                loading: 'Processing SMS…',
                 success: (msg) => msg,
-                error: 'SMS detected but not a valid transaction.',
+                error: 'Could not classify this SMS (timeout or network).',
             }
         );
 
       } catch (error) {
-        console.error("SMS Bridge Error:", error);
+        console.error("SMS bridge error:", error);
       }
     };
 

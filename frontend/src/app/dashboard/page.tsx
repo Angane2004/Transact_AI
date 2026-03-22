@@ -9,6 +9,7 @@ import { CategoriesDialog } from "@/components/CategoriesDialog";
 import { TransactionList } from "@/components/TransactionList";
 import { DashboardCharts } from "@/components/DashboardCharts";
 import { PasteSmsDialog } from "@/components/PasteSmsDialog";
+import { SmsRealtimeHint } from "@/components/SmsRealtimeHint";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { IndianRupee, CreditCard, Activity, TrendingUp, Sparkles, Lock, X, RefreshCw, Zap } from "lucide-react";
@@ -18,6 +19,7 @@ import Link from "next/link";
 import { pinService } from "@/lib/localStorageService";
 import { useDensity } from "@/lib/DensityContext";
 import { firestoreService } from "@/lib/firestoreService";
+import { fetchTransactionsFromApi, mergeTransactionLists } from "@/lib/backendTransactions";
 import { useSmsListener } from "@/hooks/useSmsListener";
 import { TransactionCategorizeNotification } from "@/components/TransactionCategorizeNotification";
 
@@ -109,9 +111,11 @@ export default function DashboardPage() {
         try {
             setLoading(true);
             
-            // 1. Fetch Transactions from Firestore (Increased limit for accurate summary)
+            // 1. Fetch from Firestore and merge with backend API (Render DB) so pasted SMS appears even without Firebase
             const transRes = await firestoreService.getTransactions(userId, 500);
-            const allFetchedTransactions = transRes.success ? transRes.data : [];
+            const fromFirestore = transRes.success ? transRes.data : [];
+            const fromApi = await fetchTransactionsFromApi();
+            const allFetchedTransactions = mergeTransactionLists(fromFirestore, fromApi);
             
             // For the transaction list, we only show the latest 10
             setTransactions(allFetchedTransactions.slice(0, 10));
@@ -343,6 +347,8 @@ export default function DashboardPage() {
                     </Link>
                 </div>
             </motion.div>
+
+            <SmsRealtimeHint />
 
             {/* PIN Reminder Banner */}
             {showPinReminder && (

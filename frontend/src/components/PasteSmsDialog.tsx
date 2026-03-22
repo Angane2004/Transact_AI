@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { api } from "@/lib/api";
-import { authService, transactionService } from "@/lib/localStorageService";
+import { authService, transactionService, type Transaction } from "@/lib/localStorageService";
 import { firestoreService } from "@/lib/firestoreService";
 
 interface PasteSmsDialogProps {
@@ -47,25 +47,42 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
 
     setLoading(true);
     try {
-      const response = await api.post("/classify", { message: smsText });
+      const response = await api.post("/classify", { message: smsText }, { timeout: 120000 });
       const data = response.data;
       
       if (data.status === "saved" || data.status === "low_confidence") {
-        const category = data.status === "saved" ? data.category : data.category;
+        const category = data.category;
         const isLowConfidence = data.status === "low_confidence";
         
         toast.success(data.status === "saved" ? `Saved! Categorized as ${category}` : "Saved with low confidence. Please categorize.");
         
+        const txnId = data.id ? String(data.id) : `txn_${Date.now()}`;
+        const amount = typeof data.amount === "number" ? data.amount : (parsedData?.amount ?? 0);
+        const receiver = data.receiver || parsedData?.merchant || "Unknown";
+
+        const localTxn: Transaction = {
+          id: txnId,
+          description: smsText,
+          amount,
+          category,
+          date: new Date().toISOString(),
+          recipient: receiver,
+          type: (data.type as "debit" | "credit") || "debit",
+          status: isLowConfidence ? "pending" : "completed",
+          ai_explanation: data.ai_explanation,
+          ai_suggestions: data.ai_suggestions,
+        };
+        transactionService.save(localTxn, userId);
+
         // Sync to Firestore if available
         if (userId) {
-            const txnId = `txn_${Date.now()}`;
             await firestoreService.saveTransaction(userId, {
                 id: txnId,
                 description: smsText,
-                amount: data.amount || 0,
+                amount,
                 category: category,
                 date: new Date().toISOString(),
-                receiver: data.receiver || "Unknown",
+                receiver,
                 type: data.type || "debit",
                 status: isLowConfidence ? "pending" : "completed"
             });

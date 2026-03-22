@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { transactionService, categoryService, authService, downloadService, DownloadRecord, cacheService } from "@/lib/localStorageService";
 import { api, endpoints } from "@/lib/api";
 import { firestoreService } from "@/lib/firestoreService";
+import { fetchTransactionsFromApi, mergeTransactionLists } from "@/lib/backendTransactions";
 import { Download, FileText, FileSpreadsheet, FileJson, Filter, Search, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -42,9 +43,11 @@ export default function TransactionsPage() {
         try {
             setLoading(true);
             
-            // 1. Fetch Transactions from Firestore
+            // 1. Firestore + backend API (same user via X-User-Id)
             const transRes = await firestoreService.getTransactions(userId, 500);
-            const newTransactions = transRes.success ? transRes.data : [];
+            const fromFirestore = transRes.success ? transRes.data : [];
+            const fromApi = await fetchTransactionsFromApi();
+            const newTransactions = mergeTransactionLists(fromFirestore, fromApi);
             setTransactions(newTransactions);
 
             // 2. Fetch Categories from Firestore

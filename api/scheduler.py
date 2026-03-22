@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from training.train_model import train_with_feedback
 from core.model import TransactionClassifier
 from api.db import get_db
 from api.models import Feedback
@@ -34,6 +33,7 @@ def run_nightly_retrain(app, hour=3, minute=0):
             # ---- RUN TRAINING ----
             try:
                 print("[SCHEDULER] Nightly retrain started...")
+                from training.train_model import train_with_feedback
 
                 # DB session
                 db: Session = next(get_db())
