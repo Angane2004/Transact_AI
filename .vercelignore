@@ -1,0 +1,18 @@
+# Exclude Python backend from Vercel deployment
+api/
+backend/
+*.py
+requirements.txt
+training/
+models/
+data/
+*.pkl
+*.joblib
+*.model
+.DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+.env
+.env.local
