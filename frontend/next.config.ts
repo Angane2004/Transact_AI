@@ -30,7 +30,7 @@ const nextConfig: NextConfig = {
   },
   
   // Optimize build process
-  swcMinify: true,
+  // swcMinify is now default in Next.js 15+
   
   // Reduce build size
   compress: true,
