@@ -46,7 +46,7 @@ else:
         # Add your production domain via ALLOWED_ORIGINS environment variable
     ]
 
-# CORS middleware
+# CORS middleware - Updated for Netlify deployment
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
