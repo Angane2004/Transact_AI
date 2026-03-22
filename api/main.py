@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, Dict
+from typing import Dict, List, Optional
 from datetime import datetime
 import traceback
 import os
@@ -350,6 +350,10 @@ def classify(request: ParseSmsRequest, db: Session = Depends(get_db), user_id: s
     if not request.message:
         raise HTTPException(status_code=400, detail="Missing message")
 
+    import time
+    # Small delay to prevent ResourceExhausted if called in rapid succession
+    time.sleep(1)
+
     # 1. Parse SMS using Gemini Parser Agent
     parsed = parser_agent.parse(request.message)
     if not parsed:
@@ -689,6 +693,7 @@ def update_transaction(
 @app.on_event("startup")
 def start_scheduler():
     try:
+        from api.scheduler import run_nightly_retrain
         run_nightly_retrain(app, hour=3, minute=0)
     except Exception as e:
         print(f"Failed to start nightly scheduler: {e}")
