@@ -1,77 +1,113 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { authService, onboardingService, pinService, userService } from "@/lib/localStorageService";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Smartphone, TrendingUp, Shield, Zap } from "lucide-react";
+import { authService, onboardingService } from "@/lib/localStorageService";
 
 export default function Home() {
   const router = useRouter();
-  const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
-    // Check authentication and onboarding status
     const checkAuthFlow = () => {
-      // 1. Check if onboarding is complete
       const hasSeenOnboarding = onboardingService.isComplete();
+      const session = authService.getSession();
       
       if (!hasSeenOnboarding) {
-        // New device/user - start with onboarding
         router.replace("/onboarding");
         return;
       }
-
-      // 2. Check if user has a session (logged in)
-      const session = authService.getSession();
       
       if (!session) {
-        // Onboarding done but not logged in - go to login
         router.replace("/login");
         return;
       }
-
-      // 3. Check if profile is complete
-      const userId = session.phone.replace(/\+/g, '');
-      const profile = userService.getProfile(userId);
       
-      if (!profile || !profile.fullName) {
-        // Logged in but profile not complete - go to setup
-        router.replace("/setup");
-        return;
-      }
-
-      // 4. Check if PIN is set
-      const hasPin = pinService.exists(userId);
-      
-      if (hasPin) {
-        // PIN exists - check if already unlocked in this session
-        const unlockKey = `app_unlocked_${userId}`;
-        const isUnlocked = typeof window !== 'undefined' ? sessionStorage.getItem(unlockKey) : null;
-        
-        if (!isUnlocked) {
-          // PIN set but not unlocked - go to unlock
-          router.replace("/unlock");
-          return;
-        }
-      }
-
-      // All checks passed - go to dashboard
       router.replace("/dashboard");
     };
 
-    // Small delay to ensure localStorage is available
-    if (typeof window !== 'undefined') {
-      setTimeout(() => {
-        checkAuthFlow();
-        setIsChecking(false);
-      }, 100);
-    }
+    const timeoutId = setTimeout(checkAuthFlow, 1000);
+    
+    return () => {
+      clearTimeout(timeoutId);
+    };
   }, [router]);
 
   return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-muted-foreground">Loading TransactAI...</p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-white dark:from-gray-900 dark:to-gray-800">
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center space-y-8">
+          <div className="space-y-4">
+            <h1 className="text-4xl font-bold text-blue-600 dark:text-blue-400">
+              TransactAI
+            </h1>
+            <p className="text-xl text-gray-600 dark:text-gray-300">
+              AI-Powered Personal Finance Manager
+            </p>
+          </div>
+
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 border-t-transparent"></div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-12 max-w-4xl mx-auto">
+            <Card className="hover:shadow-lg transition-shadow duration-300">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Smartphone className="h-5 w-5 text-blue-500" />
+                  Real-time SMS
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Automatic transaction categorization from SMS notifications
+                </CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card className="hover:shadow-lg transition-shadow duration-300">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-green-500" />
+                  Smart Analytics
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  AI-powered spending insights and trends
+                </CardDescription>
+              </CardContent>
+            </Card>
+
+            <Card className="hover:shadow-lg transition-shadow duration-300">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-purple-500" />
+                  Secure & Private
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Your data stays on your device, encrypted and safe
+                </CardDescription>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="mt-8">
+            <Button 
+              size="lg" 
+              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg"
+              onClick={() => router.push("/dashboard")}
+            >
+              <Zap className="mr-2 h-5 w-5" />
+              Get Started
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
