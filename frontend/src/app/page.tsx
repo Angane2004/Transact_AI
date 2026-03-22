@@ -22,7 +22,8 @@ export default function Home() {
     } else if (!session) {
       router.replace("/login");
     } else {
-      router.replace("/dashboard");
+      // If logged in, go to the unlock (PIN) page
+      router.replace("/unlock");
     }
   }, [router]);
 
