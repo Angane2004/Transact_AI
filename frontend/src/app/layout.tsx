@@ -6,24 +6,30 @@ import BackgroundPattern from "@/components/BackgroundPattern";
 import GlobalBackground from "@/components/GlobalBackground";
 import { ThemeProvider } from "@/components/theme-provider";
 
+// Font loaders must be called in module scope
+const ubuntu = Ubuntu({
+  variable: "--font-ubuntu",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "700"],
+});
+
+const ubuntuMono = Ubuntu_Mono({
+  variable: "--font-ubuntu-mono",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+});
+
 /** Set in GitHub Actions (APK build) to avoid flaky fonts.gstatic.com fetches on the runner. */
 const skipGoogleFonts = process.env.SKIP_GOOGLE_FONT_DOWNLOAD === "true";
 
-const ubuntu = skipGoogleFonts
+// Use empty font config when skipping Google Fonts
+const fontConfig = skipGoogleFonts
   ? { variable: "", className: "" }
-  : Ubuntu({
-      variable: "--font-ubuntu",
-      subsets: ["latin"],
-      weight: ["300", "400", "500", "700"],
-    });
+  : ubuntu;
 
-const ubuntuMono = skipGoogleFonts
+const monoFontConfig = skipGoogleFonts
   ? { variable: "", className: "" }
-  : Ubuntu_Mono({
-      variable: "--font-ubuntu-mono",
-      subsets: ["latin"],
-      weight: ["400", "700"],
-    });
+  : ubuntuMono;
 
 export const metadata: Metadata = {
   title: "TransactAI",
@@ -42,7 +48,7 @@ export default function RootLayout({
       className={skipGoogleFonts ? "ci-system-fonts" : undefined}
     >
       <body
-        className={[ubuntu.variable, ubuntuMono.variable, "antialiased"].filter(Boolean).join(" ")}
+        className={[fontConfig.variable, monoFontConfig.variable, "antialiased"].filter(Boolean).join(" ")}
       >
         <ThemeProvider
           attribute="class"
