@@ -25,6 +25,12 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses || true
+
+      - name: Install missing Android SDK components
+        run: $ANDROID_HOME/tools/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" || true
+
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
