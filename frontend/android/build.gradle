@@ -23,10 +23,20 @@ allprojects {
         mavenCentral()
     }
     
-    // Fix Java compatibility for all subprojects including Capacitor
+    // Force Java compatibility for ALL subprojects including Capacitor
     tasks.withType(JavaCompile) {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        options.encoding = 'UTF-8'
+    }
+    
+    // Also force it at the project level
+    afterEvaluate { project ->
+        project.tasks.withType(JavaCompile) {
+            sourceCompatibility = JavaVersion.VERSION_17
+            targetCompatibility = JavaVersion.VERSION_17
+            options.encoding = 'UTF-8'
+        }
     }
 }
 
