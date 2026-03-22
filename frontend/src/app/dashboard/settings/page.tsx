@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { pinService, authService, initializeData, biometricService } from "@/lib/localStorageService";
+import { pinService, authService, initializeData, biometricService, onboardingService } from "@/lib/localStorageService";
 import { firestoreService } from "@/lib/firestoreService";
 import { BiometricPrompt } from "@/components/BiometricPrompt";
 import {
@@ -629,6 +629,25 @@ export default function SettingsPage() {
                     : "Clear TransactAI data on this device"}
                 </Button>
               </div>
+
+              <div className="space-y-2 pt-3 border-t">
+                <Label className="text-sm">App Setup</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Tired of being a pro? Restart the onboarding tour.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-2"
+                  onClick={() => {
+                    onboardingService.reset();
+                    toast.success("Onboarding reset! Refresh to see the tour.");
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Reset Onboarding Tour
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -651,22 +670,42 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 pt-0">
-              <div className="bg-muted/50 rounded-lg p-3 text-[13px] font-mono break-all space-y-2 border border-border/40">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground font-sans">Webhook URL:</span>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
-                    navigator.clipboard.writeText("https://transact-ai.onrender.com/webhook/sms");
-                    toast.success("URL copied!");
-                  }}>
-                    <Copy className="h-3 w-3" />
-                  </Button>
+              <div className="space-y-3">
+                <div className="bg-muted/50 rounded-lg p-3 text-[13px] font-mono break-all space-y-3 border border-border/40">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground font-sans text-[11px] uppercase tracking-wider">Webhook URL</span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-primary/10" onClick={() => {
+                        navigator.clipboard.writeText("https://transact-ai.onrender.com/webhook/sms");
+                        toast.success("URL copied!");
+                      }}>
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="text-primary font-bold">https://transact-ai.onrender.com/webhook/sms</div>
+                  </div>
+                  
+                  <div className="space-y-1 pt-2 border-t border-border/40">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground font-sans text-[11px] uppercase tracking-wider text-green-600 dark:text-green-400">X-User-Id</span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-green-500/10" onClick={() => {
+                        const id = authService.getSession()?.phone.replace(/\+/g, "") || "your_phone";
+                        navigator.clipboard.writeText(id);
+                        toast.success("Your ID copied!");
+                      }}>
+                        <Copy className="h-3 w-3 text-green-600" />
+                      </Button>
+                    </div>
+                    <div className="text-foreground font-bold tracking-widest bg-background/50 px-2 py-1 rounded inline-block">
+                      {authService.getSession()?.phone.replace(/\+/g, "") || "91..."}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-primary">https://transact-ai.onrender.com/webhook/sms</div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 pt-1">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <Smartphone className="h-4 w-4 text-blue-500" />
+                  <Smartphone className="h-4 w-4 text-primary" />
                   MacroDroid Step-by-Step Guide:
                 </h4>
                 <div className="text-xs text-muted-foreground space-y-3">
@@ -683,32 +722,16 @@ export default function SettingsPage() {
                     <p>Search <strong>"HTTP Request"</strong> &rarr; Select <strong>POST</strong> method.</p>
                   </div>
                   <div className="space-y-2 pl-2 border-l-2 border-primary/20">
-                    <div className="flex items-center justify-between group">
-                      <p>Header: <code className="bg-muted px-1 italic text-primary">X-User-Id</code></p>
-                      <Button variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => {
-                        navigator.clipboard.writeText(authService.getSession()?.phone.replace(/\+/g, "") || "91...");
-                        toast.success("ID copied!");
-                      }}>
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <div className="flex items-center justify-between group">
-                      <p>Body (JSON): click (...) to select <code className="bg-muted px-1 italic">{"{\"message\": \"[sms_message]\"}"}</code></p>
-                      <Button variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => {
-                        navigator.clipboard.writeText("{\"message\": \"[sms_message]\"}");
-                        toast.success("JSON Body copied!");
-                      }}>
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                    </div>
+                    <p>Header: <code className="bg-muted px-1 italic">X-User-Id</code> with the ID shown above.</p>
+                    <p>Body (JSON): <code className="bg-muted px-1 italic">{"{\"message\": \"[sms_message]\"}"}</code></p>
                   </div>
                 </div>
               </div>
 
               <div className="pt-3 border-t">
                 <p className="text-[11px] text-muted-foreground italic flex items-center gap-1.5 leading-tight">
-                  <LayoutDashboard className="h-3 w-3" />
-                  Once saved, every bank SMS will be categorized instantly by your AI on Render and sync to your dashboard.
+                  <Zap className="h-3 w-3 text-amber-500" />
+                  Every bank SMS will now be categorized instantly by your AI on Render and sync here.
                 </p>
               </div>
             </CardContent>
