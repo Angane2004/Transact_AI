@@ -181,7 +181,13 @@ class RuleEngine:
                     norm = cfg.get("confidence_norm", 3.0)
 
         if not best_category or best_score == 0:
-            return None
+            # Fallback for when no rules match - prevents "unknown" in UI
+            return RuleMatch(
+                category="Others",
+                confidence=0.1,
+                matched_terms=[],
+                score=0.0
+            )
 
         confidence = min(best_score / norm, 1.0)
         if confidence < min_confidence:

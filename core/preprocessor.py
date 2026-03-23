@@ -94,13 +94,14 @@ def extract_recipient(text: str) -> str:
     # 1. Merchant name extraction patterns (Heuristic-based)
     # Order matters: more specific patterns first
     patterns = [
-        r'to\s+([a-z\s0-9\.&]{2,30})',
-        r'at\s+([a-z\s0-9\.&]{2,30})',
-        r'towards\s+([a-z\s0-9\.&]{2,30})',
-        r'by\s+([a-z\s0-9\.&]{2,30})',
-        r'paid to\s+([a-z\s0-9\.&]{2,30})',
-        r'sent to\s+([a-z\s0-9\.&]{2,30})',
-        r'received from\s+([a-z\s0-9\.&]{2,30})',
+        r'for\s+([a-z\s0-9\._&]{2,40})',
+        r'paid to\s+([a-z\s0-9\._&]{2,40})',
+        r'sent to\s+([a-z\s0-9\._&]{2,40})',
+        r'at\s+([a-z\s0-9\._&]{2,40})',
+        r'towards\s+([a-z\s0-9\._&]{2,40})',
+        r'by\s+([a-z\s0-9\._&]{2,40})',
+        r'received from\s+([a-z\s0-9\._&]{2,40})',
+        r'to\s+([a-z\s0-9\._&]{2,40})',
     ]
 
     merchant = "Unknown"
@@ -108,11 +109,11 @@ def extract_recipient(text: str) -> str:
         m_match = re.search(p, t)
         if m_match:
             candidate = m_match.group(1).strip()
-            # Skip if it looks like a date or account number
-            if re.match(r'^\d', candidate):
+            # Skip if it looks like a date or account number or IS an amount
+            # If it starts with a number and has no letters, it's probably not a merchant
+            if (re.match(r'^\d', candidate) and not re.search(r'[a-z]', candidate, re.I)) or \
+               any(sym in candidate.lower() for sym in ['rs', 'inr', '₹', 'bal', 'avbl']):
                 continue
-                
-            # Clean up: stop at first occurrence of common "filler" words
             stop_words = [
                 'on', 'at', 'from', 'via', 'towards', 'using', 'successful', 
                 'for', 'a/c', 'account', 'ref', 'available', 'avbl', 'bal', 

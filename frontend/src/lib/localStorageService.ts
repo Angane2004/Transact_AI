@@ -46,7 +46,7 @@ const getUserKey = (baseKey: string, userId?: string): string => {
         const session = localStorage.getItem('transactai_auth_session');
         if (session) {
             const parsed = JSON.parse(session);
-            const phone = parsed.phone?.replace(/\+/g, '') || 'default';
+            const phone = (parsed.phone || 'default').replace(/\+/g, '').trim();
             return `${baseKey}_${phone}`;
         }
     } catch (e) {
@@ -190,7 +190,17 @@ export const categoryService = {
         if (typeof window === 'undefined') return [];
         const key = getUserKey(STORAGE_KEYS.CATEGORIES, userId);
         const data = localStorage.getItem(key);
-        return data ? JSON.parse(data) : [];
+        if (data) return JSON.parse(data);
+        
+        // Return defaults if none exist
+        const defaultNames = [
+            'Food', 'Grocery', 'Fuel', 'Shopping', 'Medical', 'Bills', 
+            'Transport', 'Refund', 'Salary', 'Subscription', 'UPI_Transfer', 'Others'
+        ];
+        return defaultNames.map(name => ({
+            name,
+            createdAt: new Date().toISOString()
+        }));
     },
 
     add(categoryName: string, userId?: string): void {

@@ -41,7 +41,7 @@ export function CategorizeTransactionDialog({
     useEffect(() => {
         if (open) {
             const session = authService.getSession();
-            const userId = session?.phone.replace(/\+/g, '');
+            const userId = (session?.phone || 'default').replace(/\+/g, '').trim();
             const allCategories = categoryService.getNames(userId);
             setCategories(allCategories);
             setSelectedCategory("");
@@ -57,7 +57,7 @@ export function CategorizeTransactionDialog({
         }
 
         const session = authService.getSession();
-        const userId = session?.phone.replace(/\+/g, '');
+        const userId = (session?.phone || 'default').replace(/\+/g, '').trim();
         const categoryName = newCategory.trim();
         const existing = categoryService.getNames(userId);
         
@@ -67,7 +67,7 @@ export function CategorizeTransactionDialog({
         }
 
         categoryService.add(categoryName, userId);
-        const updated = categoryService.getNames();
+        const updated = categoryService.getNames(userId);
         setCategories(updated);
         setSelectedCategory(categoryName);
         setNewCategory("");

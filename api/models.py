@@ -44,6 +44,9 @@ class Transaction(Base):
     # Source of transaction (mobile app)
     source = Column(String(20), default="mobile")
 
+    # Credit or Debit
+    type = Column(String(10), default="debit")
+
     # AI Agents Data
     is_anomaly = Column(Boolean, default=False)
     anomaly_reason = Column(String(500), nullable=True)
@@ -77,6 +80,9 @@ class Feedback(Base):
 
     # User-selected correct category
     chosen_category = Column(String(100), nullable=False)
+
+    # Credit or Debit
+    type = Column(String(10), default="debit")
 
     # Auto timestamp
     created_at = Column(DateTime(timezone=True), server_default=func.now())

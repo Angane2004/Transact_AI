@@ -185,8 +185,12 @@ def classify(payload: Dict, db: Session = Depends(get_db), user_id: str = Depend
         # Fallback when model is not loaded
         cat, conf = "Food", 0.5
 
-    amount = extract_amount(text)
-    receiver = extract_recipient(text)
+    # Use parser agent to get structured data including 'type'
+    parsed = parser_agent.parse(text)
+    amount = parsed.amount or extract_amount(text)
+    receiver = parsed.merchant if parsed.merchant != "Unknown" else extract_recipient(text)
+    txn_type = parsed.type or "debit"
+    
     txn_time = datetime.now()
     is_anomaly = False
     anomaly_reason = None
@@ -213,6 +217,8 @@ def classify(payload: Dict, db: Session = Depends(get_db), user_id: str = Depend
         source="mobile",
         is_anomaly=is_anomaly,
         anomaly_reason=anomaly_reason,
+        type=txn_type,
+        status="pending" if (cat == "Others" or conf < 0.6) else "completed",
         user_id=user_id
     )
     try:
@@ -232,10 +238,11 @@ def classify(payload: Dict, db: Session = Depends(get_db), user_id: str = Depend
             "confidence": float(conf),
             "amount": amount,
             "receiver": receiver,
-            "type": "debit",
+            "type": txn_type,
             "id": str(txn.id),
             "is_anomaly": is_anomaly,
             "anomaly_reason": anomaly_reason,
+            "needs_categorization": cat == "Others" or conf < 0.6
         }
 
     # Optional extra Gemini call — disabled by default (avoids 60s+ timeouts on cold hosts)
@@ -259,13 +266,14 @@ def classify(payload: Dict, db: Session = Depends(get_db), user_id: str = Depend
         "allow_new_category": True,
         "amount": amount,
         "receiver": receiver,
-        "type": "debit",
+        "type": txn_type,
         "id": str(txn.id),
         "clean_text": cleaned,
         "raw_text": text,
         "ai_explanation": ai_explanation,
         "ai_suggestions": ai_suggestions,
         "category": cat,
+        "needs_categorization": True
     }
 
 # ============================================================
@@ -365,6 +373,7 @@ def get_anomalies(db: Session = Depends(get_db), user_id: str = Depends(get_curr
                 "category": t.predicted_category,
                 "receiver": t.receiver_name,
                 "timestamp": t.txn_time.isoformat() if t.txn_time else None,
+                "type": t.type or "debit",
                 "anomaly_reason": getattr(t, 'anomaly_reason', None)
             }
             for t in rows
@@ -455,7 +464,9 @@ def get_transactions(
                 "timestamp": t.txn_time.isoformat() if t.txn_time else None,
                 "confidence": float(t.confidence) if t.confidence else None,
                 "is_anomaly": getattr(t, 'is_anomaly', False),
-                "anomaly_reason": getattr(t, 'anomaly_reason', None)
+                "anomaly_reason": getattr(t, 'anomaly_reason', None),
+                "type": t.type or "debit",
+                "status": t.status or "completed"
             }
             for t in rows
         ],

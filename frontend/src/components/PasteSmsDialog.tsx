@@ -8,10 +8,10 @@ import { Loader2, Sparkles, Check, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 
-import axios from "axios";
-import { api } from "@/lib/mockApi"; // Use mock API for production
-import { authService, transactionService, type Transaction } from "@/lib/localStorageService";
+import { api } from "@/lib/api";
+import { authService, transactionService, categoryService, type Transaction } from "@/lib/localStorageService";
 import { firestoreService } from "@/lib/firestoreService";
+import { CategorizeTransactionDialog } from "./CategorizeTransactionDialog";
 
 interface PasteSmsDialogProps {
   onTransactionAdded: () => void;
@@ -22,6 +22,10 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
   const [smsText, setSmsText] = useState("");
   const [loading, setLoading] = useState(false);
   const [parsedData, setParsedData] = useState<any>(null);
+
+  // For manual categorization trigger
+  const [showCategorizeDialog, setShowCategorizeDialog] = useState(false);
+  const [pendingTxnData, setPendingTxnData] = useState<any>(null);
 
   const handleParse = async () => {
     if (!smsText.trim()) {
@@ -34,15 +38,11 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
       const response = await api.post("/parse-sms", { message: smsText });
       setParsedData(response.data.parsed);
       toast.success("AI parsed the SMS successfully!");
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      let detail =
-        "Could not reach your API. On Netlify set NEXT_PUBLIC_API_URL to your Render backend; add that URL to Render ALLOWED_ORIGINS.";
-      if (axios.isAxiosError(error)) {
-        const d = error.response?.data?.detail;
-        if (typeof d === "string") detail = d;
-        else if (error.code === "ECONNABORTED") detail = "Request timed out — try again.";
-        else if (!error.response) detail = "Network error — check API URL and CORS on the backend.";
+      let detail = "Failed to parse SMS. Please check your network.";
+      if (error.response?.data?.detail) {
+        detail = error.response.data.detail;
       }
       toast.error(detail);
     } finally {
@@ -52,7 +52,7 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
 
   const handleConfirm = async () => {
     const session = authService.getSession();
-    const userId = session?.phone.replace(/\+/g, '').trim();
+    const userId = (session?.phone || 'default').replace(/\+/g, '').trim();
 
     setLoading(true);
     try {
@@ -62,43 +62,64 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
       if (data.status === "saved" || data.status === "low_confidence") {
         const category = data.category;
         const isLowConfidence = data.status === "low_confidence";
-
-        toast.success(data.status === "saved" ? `Saved! Categorized as ${category}` : "Saved with low confidence. Please categorize.");
-
-        const txnId = data.id ? String(data.id) : `txn_${Date.now()}`;
         const amount = typeof data.amount === "number" ? data.amount : (parsedData?.amount ?? 0);
         const receiver = data.receiver || parsedData?.merchant || "Unknown";
+        const txnId = data.id ? String(data.id) : `txn_${Date.now()}`;
+        const txnType = data.type || "debit";
 
-        const localTxn: Transaction = {
-          id: txnId,
-          description: smsText,
-          amount,
-          category,
-          date: new Date().toISOString(),
-          recipient: receiver,
-          type: (data.type as "debit" | "credit") || "debit",
-          status: isLowConfidence ? "pending" : "completed",
-          ai_explanation: data.ai_explanation,
-          ai_suggestions: data.ai_suggestions,
-        };
-        transactionService.save(localTxn, userId);
+        // Logic check: If category exists in user list, save immediately.
+        // Otherwise, trigger manual categorization.
+        const existingCategories = categoryService.getAll(userId);
+        const matchedCategory = existingCategories.find(c => c.name.toLowerCase() === category.toLowerCase());
+        const categoryExists = !!matchedCategory;
+        const finalCategory = matchedCategory ? matchedCategory.name : category;
 
-        // Sync to Firestore if available
-        if (userId) {
-          await firestoreService.saveTransaction(userId, {
+        if (!isLowConfidence && category && category !== "Others" && categoryExists) {
+          // Auto-save logic
+          toast.success(`Saved! Categorized as ${finalCategory}`);
+
+          const localTxn: Transaction = {
             id: txnId,
             description: smsText,
             amount,
-            category: category,
+            category: finalCategory,
             date: new Date().toISOString(),
-            receiver,
-            type: data.type || "debit",
-            status: isLowConfidence ? "pending" : "completed"
-          });
-        }
+            recipient: receiver,
+            type: (txnType as "debit" | "credit"),
+            status: "completed",
+            ai_explanation: data.ai_explanation,
+            ai_suggestions: data.ai_suggestions,
+          };
+          transactionService.save(localTxn, userId);
 
-        onTransactionAdded();
-        handleClose();
+          if (userId) {
+            await firestoreService.saveTransaction(userId, {
+              id: txnId,
+              description: smsText,
+              amount,
+              category,
+              date: new Date().toISOString(),
+              receiver,
+              type: txnType,
+              status: "completed"
+            });
+          }
+
+          onTransactionAdded();
+          handleClose();
+        } else {
+          // Trigger Manual Categorization Dialog
+          setPendingTxnData({
+            id: txnId,
+            amount,
+            receiver,
+            type: txnType,
+            raw_text: smsText
+          });
+          setShowCategorizeDialog(true);
+          // Don't close PasteSms yet, or close it silently
+          setOpen(false); 
+        }
       }
     } catch (error) {
       console.error("Failed to save to cloud, falling back to local:", error);
@@ -132,6 +153,61 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
     setOpen(false);
     setSmsText("");
     setParsedData(null);
+    setLoading(false);
+  };
+
+  const handleManualCategorized = async (finalCategory: string) => {
+    if (!pendingTxnData) return;
+    
+    const session = authService.getSession();
+    const userId = (session?.phone || 'default').replace(/\+/g, '').trim();
+    
+    setLoading(true);
+    try {
+      const { id, amount, receiver, type, raw_text } = pendingTxnData;
+      
+      const localTxn: Transaction = {
+        id,
+        description: raw_text,
+        amount,
+        category: finalCategory,
+        date: new Date().toISOString(),
+        recipient: receiver,
+        type: type,
+        status: "completed",
+      };
+      
+      transactionService.save(localTxn, userId);
+
+      if (userId) {
+        await firestoreService.saveTransaction(userId, {
+          id,
+          description: raw_text,
+          amount,
+          category: finalCategory,
+          date: new Date().toISOString(),
+          receiver,
+          type,
+          status: "completed"
+        });
+        
+        // Also update backend API
+        await api.patch(`/transactions/${id}`, { 
+          category: finalCategory,
+          status: 'completed'
+        });
+      }
+
+      toast.success(`Transaction saved under ${finalCategory}`);
+      onTransactionAdded();
+      handleClose();
+      setPendingTxnData(null);
+    } catch (error) {
+      console.error("Failed to finalize categorization:", error);
+      toast.error("Failed to save transaction.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -238,6 +314,16 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
           )}
         </DialogFooter>
       </DialogContent>
+      
+      {pendingTxnData && (
+        <CategorizeTransactionDialog
+          open={showCategorizeDialog}
+          onOpenChange={setShowCategorizeDialog}
+          amount={pendingTxnData.amount}
+          receiver={pendingTxnData.receiver}
+          onCategorized={handleManualCategorized}
+        />
+      )}
     </Dialog>
   );
 }

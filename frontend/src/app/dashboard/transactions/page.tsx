@@ -10,7 +10,7 @@ import { transactionService, categoryService, authService, downloadService, Down
 import { api, endpoints } from "@/lib/api";
 import { firestoreService } from "@/lib/firestoreService";
 import { fetchTransactionsFromApi, mergeTransactionLists } from "@/lib/backendTransactions";
-import { Download, FileText, FileSpreadsheet, FileJson, Filter, Search, AlertTriangle } from "lucide-react";
+import { Download, FileText, FileSpreadsheet, FileJson, Filter, Search, AlertTriangle, Sparkles, Edit3 } from "lucide-react";
 import { toast } from "sonner";
 
 type TimePeriod = "today" | "weekly" | "monthly" | "yearly";
@@ -20,7 +20,7 @@ export default function TransactionsPage() {
     const [transactions, setTransactions] = useState<any[]>([]);
     const [filteredTransactions, setFilteredTransactions] = useState<any[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string>("all");
-    const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>("today");
+    const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>("monthly");
     const [searchQuery, setSearchQuery] = useState("");
     const [exportFormat, setExportFormat] = useState<ExportFormat>("csv");
     const [categories, setCategories] = useState<string[]>([]);
@@ -102,7 +102,19 @@ export default function TransactionsPage() {
         }
 
         filtered = filtered.filter(t => {
-            const txDate = new Date(t.txn_time || t.date);
+            const dateVal = t.txn_time || t.date || t.timestamp;
+            if (!dateVal) return false;
+            
+            const txDate = new Date(dateVal);
+            if (isNaN(txDate.getTime())) return false;
+            
+            // For monthly, yearly, weekly - check range. 
+            // For today, check if on same calendar day OR within 24 hours.
+            if (selectedPeriod === "today") {
+                const today = new Date();
+                return txDate.toDateString() === today.toDateString();
+            }
+            
             return txDate >= periodStart && txDate <= now;
         });
 
@@ -404,8 +416,15 @@ export default function TransactionsPage() {
                                                         value={transaction.category}
                                                         onValueChange={(value) => handleCategoryChange(transaction.id, value)}
                                                     >
-                                                        <SelectTrigger className="w-[180px]">
-                                                            <SelectValue />
+                                                        <SelectTrigger 
+                                                            className={`w-[180px] ${(transaction.status === 'pending' || transaction.category === 'Others') ? 'border-orange-500 bg-orange-50/50' : ''}`}
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                {(transaction.status === 'pending' || transaction.category === 'Others') && (
+                                                                    <Sparkles className="h-3 w-3 text-orange-500 animate-pulse" />
+                                                                )}
+                                                                <SelectValue />
+                                                            </div>
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             {categories.map(cat => (

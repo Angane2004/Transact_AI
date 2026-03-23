@@ -7,10 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { format } from "date-fns";
 import { Transaction } from "@/lib/localStorageService";
 import { motion } from "framer-motion";
-import { IndianRupee, Tag, Edit3 } from "lucide-react";
+import { IndianRupee, Tag, Edit3, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { firestoreService } from "@/lib/firestoreService";
 import { authService } from "@/lib/localStorageService";
+import { CategorizeTransactionDialog } from "./CategorizeTransactionDialog";
+import { api } from "@/lib/api";
 
 interface TransactionListProps {
     transactions: any[];
@@ -21,6 +23,12 @@ interface TransactionListProps {
 export const TransactionList = memo(function TransactionList({ transactions, categories = [], onTransactionCategorized }: TransactionListProps) {
     const [editingTransaction, setEditingTransaction] = useState<string | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string>("");
+    
+    // For the enhanced dialog
+    const [showCategorizeDialog, setShowCategorizeDialog] = useState(false);
+    const [selectedTxnForCategorize, setSelectedTxnForCategorize] = useState<string | null>(null);
+    const [receiverForCategorize, setReceiverForCategorize] = useState("");
+    const [amountForCategorize, setAmountForCategorize] = useState(0);
 
     const handleCategorize = async (transactionId: string, category: string) => {
         if (!category) {
@@ -30,7 +38,7 @@ export const TransactionList = memo(function TransactionList({ transactions, cat
 
         try {
             const session = authService.getSession();
-            const userId = session?.phone.replace(/\+/g, '').trim();
+            const userId = (session?.phone || 'default').replace(/\+/g, '').trim();
             
             if (!userId) {
                 toast.error("User not identified");
@@ -42,7 +50,21 @@ export const TransactionList = memo(function TransactionList({ transactions, cat
                 status: 'completed'
             });
 
+            // CRITICAL: Update local storage too so it reflects immediately
+            const { transactionService } = await import("@/lib/localStorageService");
+            transactionService.update(transactionId, { category, status: 'completed' }, userId);
+
             if (res.success) {
+                // Also update backend if it exists there
+                try {
+                    await api.patch(`/transactions/${transactionId}`, { 
+                        category: category,
+                        status: 'completed'
+                    });
+                } catch (e) {
+                    console.log("Optional backend sync failed - probably firestore-only txn");
+                }
+
                 toast.success(`Transaction categorized as ${category}`);
                 setEditingTransaction(null);
                 setSelectedCategory("");
@@ -108,13 +130,35 @@ export const TransactionList = memo(function TransactionList({ transactions, cat
                                             }
                                         })()}
                                     </span>
+                                    {(txn.status === 'pending' || txn.category === 'Others') && (
+                                        <div className="flex items-center gap-1 mt-1 text-[10px] font-bold text-orange-500 uppercase tracking-wider">
+                                            <Sparkles className="h-3 w-3" />
+                                            Needs Category
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex flex-col items-end gap-2 ml-4">
                                     <div className="flex items-center gap-2">
                                         <span className={`font-bold text-sm md:text-base ${txn.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
                                             {txn.type === 'credit' ? '+' : '-'}₹{Number(txn.amount)?.toFixed(2) || "0.00"}
                                         </span>
-                                        {!txn.category && (
+                                        {(txn.category === 'Others' || txn.status === 'pending') && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    setSelectedTxnForCategorize(txn.id);
+                                                    setReceiverForCategorize(txn.description || txn.receiver_name || "Unknown");
+                                                    setAmountForCategorize(Number(txn.amount) || 0);
+                                                    setShowCategorizeDialog(true);
+                                                }}
+                                                className="h-6 px-2 text-[10px] border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100"
+                                            >
+                                                <Edit3 className="h-2 w-2 mr-1" />
+                                                Categorize
+                                            </Button>
+                                        )}
+                                        {!txn.category && txn.category !== 'Others' && (
                                             <Button
                                                 size="sm"
                                                 variant="outline"
@@ -177,6 +221,18 @@ export const TransactionList = memo(function TransactionList({ transactions, cat
                         ))}
                     </div>
                 </CardContent>
+
+            <CategorizeTransactionDialog
+                open={showCategorizeDialog}
+                onOpenChange={setShowCategorizeDialog}
+                amount={amountForCategorize}
+                receiver={receiverForCategorize}
+                onCategorized={(category) => {
+                    if (selectedTxnForCategorize) {
+                        handleCategorize(selectedTxnForCategorize, category);
+                    }
+                }}
+            />
         </Card>
     );
 });

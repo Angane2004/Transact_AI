@@ -65,7 +65,7 @@ export default function DashboardPage() {
     useEffect(() => {
         // Check if PIN is set
         const session = authService.getSession();
-        const userId = session?.phone.replace(/\+/g, '');
+        const userId = (session?.phone || 'default').replace(/\+/g, '').trim();
         if (userId) {
             const hasPin = pinService.exists(userId);
             setShowPinReminder(!hasPin);
@@ -300,6 +300,9 @@ export default function DashboardPage() {
         if (!userId) return;
 
         try {
+            // Update local storage too so it reflects immediately
+            transactionService.update(pendingTransaction.id, { category, status: 'completed' }, userId);
+
             const res = await firestoreService.updateTransaction(userId, pendingTransaction.id, {
                 category: category,
                 status: 'completed'

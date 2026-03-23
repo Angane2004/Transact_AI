@@ -15,13 +15,10 @@ export class BiometricService {
     }
 
     try {
-      // Check if device has biometric capabilities
       if (window.plugins?.fingerPrint?.isAvailable) {
         const result = await window.plugins.fingerPrint.isAvailable();
         return result.isAvailable;
       }
-      
-      // Fallback check
       return true;
     } catch (error) {
       console.error('Biometric availability check failed:', error);
@@ -31,11 +28,11 @@ export class BiometricService {
 
   static async authenticate(reason: string = 'Authenticate to continue'): Promise<boolean> {
     if (!Capacitor.isNativePlatform()) {
-      // WebAuthn fallback for web
       try {
         const challenge = new Uint8Array(32);
         window.crypto.getRandomValues(challenge);
 
+        // For web, we try to get an existing credential
         const credential = await navigator.credentials.get({
           publicKey: {
             challenge,
@@ -46,14 +43,17 @@ export class BiometricService {
         });
 
         return !!credential;
-      } catch (error) {
+      } catch (error: any) {
+        if (error.name === 'NotAllowedError') {
+          console.log('User cancelled biometric prompt');
+          return false;
+        }
         console.error('WebAuthn authentication failed:', error);
         throw new Error('Biometric authentication failed');
       }
     }
 
     try {
-      // Native biometric authentication
       if (window.plugins?.fingerPrint?.show) {
         const result = await window.plugins.fingerPrint.show({
           clientId: 'transactai-app',
@@ -65,7 +65,6 @@ export class BiometricService {
         
         return result.withFingerprint || result.withBackup;
       }
-      
       throw new Error('Biometric authentication not available');
     } catch (error: any) {
       console.error('Native biometric authentication failed:', error);
@@ -75,12 +74,51 @@ export class BiometricService {
 
   static async enroll(reason: string = 'Enable biometric authentication'): Promise<boolean> {
     if (!Capacitor.isNativePlatform()) {
-      // For web, just check if biometrics are available
-      return this.isAvailable();
+      try {
+        const challenge = new Uint8Array(32);
+        window.crypto.getRandomValues(challenge);
+        
+        const userId = new Uint8Array(16);
+        window.crypto.getRandomValues(userId);
+
+        // Create new WebAuthn credential for enrollment
+        const credential = await navigator.credentials.create({
+          publicKey: {
+            challenge,
+            rp: {
+              name: "TransactAI",
+              id: window.location.hostname,
+            },
+            user: {
+              id: userId,
+              name: "user@transactai.app",
+              displayName: "TransactAI User",
+            },
+            pubKeyCredParams: [
+              { type: "public-key", alg: -7 }, // ES256
+              { type: "public-key", alg: -257 }, // RS256
+            ],
+            authenticatorSelection: {
+              userVerification: "required",
+              residentKey: "preferred",
+            },
+            timeout: 60000,
+            attestation: "none",
+          }
+        });
+
+        return !!credential;
+      } catch (error: any) {
+        if (error.name === 'NotAllowedError') {
+          console.log('User cancelled enrollment');
+          return false;
+        }
+        console.error('WebAuthn enrollment failed:', error);
+        throw new Error('Biometric enrollment failed');
+      }
     }
 
     try {
-      // Native enrollment
       if (window.plugins?.fingerPrint?.show) {
         const result = await window.plugins.fingerPrint.show({
           clientId: 'transactai-app',
@@ -92,7 +130,6 @@ export class BiometricService {
         
         return result.withFingerprint || result.withBackup;
       }
-      
       throw new Error('Biometric enrollment not available');
     } catch (error: any) {
       console.error('Biometric enrollment failed:', error);

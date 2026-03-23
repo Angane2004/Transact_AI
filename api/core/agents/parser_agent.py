@@ -26,7 +26,9 @@ class ParserAgent(BaseAgent):
     SYSTEM_INSTRUCTION = """
     You are a financial parsing assistant expert at reading Indian banking SMS and notification alerts.
     Extract the transaction details into the defined JSON schema.
-    If a certain piece of information is missing from the text, return null for that field.
+    IMPORTANT: Carefully extract the 'merchant' field. This is the person or business who received or sent the money (e.g., 'Zomato', 'Netflix', 'Amazon', 'Rahul Sharma'). 
+    Do NOT include the amount or currency in the merchant field.
+    If information is missing, return null.
     """
 
     def is_enabled(self) -> bool:
@@ -74,18 +76,23 @@ class ParserAgent(BaseAgent):
             merchant = "Unknown"
             # Try different patterns, prioritize "to", "at", "towards", "by"
             patterns = [
-                r'to\s+([a-z\s0-9\.&]{2,30})',
-                r'at\s+([a-z\s0-9\.&]{2,30})',
-                r'towards\s+([a-z\s0-9\.&]{2,30})',
-                r'by\s+([a-z\s0-9\.&]{2,30})',
+                r'for\s+([a-z\s0-9\._&]{2,40})',
+                r'paid to\s+([a-z\s0-9\._&]{2,40})',
+                r'sent to\s+([a-z\s0-9\._&]{2,40})',
+                r'at\s+([a-z\s0-9\._&]{2,40})',
+                r'towards\s+([a-z\s0-9\._&]{2,40})',
+                r'by\s+([a-z\s0-9\._&]{2,40})',
+                r'received from\s+([a-z\s0-9\._&]{2,40})',
+                r'to\s+([a-z\s0-9\._&]{2,40})',
             ]
             
             for p in patterns:
                 m_match = re.search(p, text)
                 if m_match:
                     candidate = m_match.group(1).strip()
-                    # If it starts with a number (like a date or account), it's probably not the merchant
-                    if re.match(r'^\d', candidate):
+                    # If it starts with a number and has no letters, or contains currency markers, it's not the merchant
+                    if (re.match(r'^\d', candidate) and not re.search(r'[a-z]', candidate, re.I)) or \
+                       any(sym in candidate.lower() for sym in ['rs', 'inr', '₹', 'bal', 'avbl']):
                         continue
                         
                     # Clean up: stop at first occurrence of common "filler" words or sentence ends

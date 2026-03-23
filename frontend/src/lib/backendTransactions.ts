@@ -3,21 +3,21 @@ import { api } from "@/lib/api";
 /** Maps GET /transactions rows to the shape used by dashboard lists. */
 export async function fetchTransactionsFromApi(): Promise<any[]> {
   try {
-    const res = await api.get("/transactions", { params: { limit: 500 } });
+    const res = await api.get("/transactions", { params: { limit: 1000 } });
     const rows = res.data?.results ?? [];
     return rows.map((r: any) => ({
       id: r.id,
       description: r.raw_text,
       amount: r.amount ?? 0,
-      category: r.category,
-      predicted_category: r.category,
-      date: r.timestamp,
+      category: r.category || r.predicted_category || "Others",
+      predicted_category: r.predicted_category || r.category || "Others",
+      date: r.timestamp || r.txn_time,
       txn_time: r.timestamp,
       receiver: r.receiver,
       recipient: r.receiver,
       receiver_name: r.receiver,
       raw_text: r.raw_text,
-      type: "debit" as const,
+      type: r.type || "debit",
       status: "completed" as const,
     }));
   } catch {
