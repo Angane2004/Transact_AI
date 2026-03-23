@@ -58,13 +58,13 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
     try {
       const response = await api.post("/classify", { message: smsText }, { timeout: 120000 });
       const data = response.data;
-      
+
       if (data.status === "saved" || data.status === "low_confidence") {
         const category = data.category;
         const isLowConfidence = data.status === "low_confidence";
-        
+
         toast.success(data.status === "saved" ? `Saved! Categorized as ${category}` : "Saved with low confidence. Please categorize.");
-        
+
         const txnId = data.id ? String(data.id) : `txn_${Date.now()}`;
         const amount = typeof data.amount === "number" ? data.amount : (parsedData?.amount ?? 0);
         const receiver = data.receiver || parsedData?.merchant || "Unknown";
@@ -85,44 +85,44 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
 
         // Sync to Firestore if available
         if (userId) {
-            await firestoreService.saveTransaction(userId, {
-                id: txnId,
-                description: smsText,
-                amount,
-                category: category,
-                date: new Date().toISOString(),
-                receiver,
-                type: data.type || "debit",
-                status: isLowConfidence ? "pending" : "completed"
-            });
+          await firestoreService.saveTransaction(userId, {
+            id: txnId,
+            description: smsText,
+            amount,
+            category: category,
+            date: new Date().toISOString(),
+            receiver,
+            type: data.type || "debit",
+            status: isLowConfidence ? "pending" : "completed"
+          });
         }
 
         onTransactionAdded();
         handleClose();
       }
     } catch (error) {
-       console.error("Failed to save to cloud, falling back to local:", error);
-       
-       // Offline saving fallback
-       if (parsedData) {
-         const offlineTxn = {
-           id: `offline_${Date.now()}`,
-           description: smsText,
-           amount: parsedData.amount || 0,
-           category: parsedData.category || "Uncategorized",
-           date: new Date().toISOString(),
-           recipient: parsedData.merchant || "Unknown",
-           type: parsedData.type || "debit",
-           status: "pending" as const
-         };
-         
-         transactionService.save(offlineTxn, userId);
-         toast.info("Saved locally (offline mode). It will sync when cloud is back.");
-         onTransactionAdded();
-         handleClose();
-       } else {
-         toast.error("Failed to save transaction. Try again later.");
-       }
+      console.error("Failed to save to cloud, falling back to local:", error);
+
+      // Offline saving fallback
+      if (parsedData) {
+        const offlineTxn = {
+          id: `offline_${Date.now()}`,
+          description: smsText,
+          amount: parsedData.amount || 0,
+          category: parsedData.category || "Uncategorized",
+          date: new Date().toISOString(),
+          recipient: parsedData.merchant || "Unknown",
+          type: parsedData.type || "debit",
+          status: "pending" as const
+        };
+
+        transactionService.save(offlineTxn, userId);
+        toast.info("Saved locally (offline mode). It will sync when cloud is back.");
+        onTransactionAdded();
+        handleClose();
+      } else {
+        toast.error("Failed to save transaction. Try again later.");
+      }
     } finally {
       setLoading(false);
     }
@@ -136,7 +136,7 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button 
+      <Button
         onClick={() => setOpen(true)}
         className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg border-0"
       >
@@ -208,14 +208,14 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
 
         <DialogFooter className="gap-2 sm:gap-0">
           {!parsedData ? (
-             <Button
-                className="w-full bg-blue-600 hover:bg-blue-700"
-                onClick={handleParse}
-                disabled={loading || !smsText.trim()}
-              >
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                Analyze SMS
-              </Button>
+            <Button
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              onClick={handleParse}
+              disabled={loading || !smsText.trim()}
+            >
+              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              Analyze SMS
+            </Button>
           ) : (
             <div className="flex w-full gap-2">
               <Button
@@ -231,8 +231,8 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
                 onClick={handleConfirm}
                 disabled={loading}
               >
-                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-                 Confirm & Save
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                Confirm & Save
               </Button>
             </div>
           )}

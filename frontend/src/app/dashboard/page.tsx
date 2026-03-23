@@ -53,6 +53,7 @@ export default function DashboardPage() {
         console.log("Dashboard categories state updated:", categories);
         console.log("Categories length:", categories?.length);
     }, [categories]);
+    
     const [showPinReminder, setShowPinReminder] = useState(false);
     const [pendingTransaction, setPendingTransaction] = useState<any>(null);
     const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
@@ -114,16 +115,42 @@ export default function DashboardPage() {
         const session = authService.getSession();
         const userId = session?.phone.replace(/\+/g, '').trim();
 
-        if (!userId) return;
+        if (!userId) {
+            console.warn("🚫 Dashboard: No userId found in session. Stopping sync.");
+            setLoading(false);
+            return;
+        }
+
+        console.log(`📡 Dashboard: Starting data sync for user ${userId} (force: ${force})`);
 
         try {
             setLoading(true);
             
-            // 1. Fetch from Firestore and merge with backend API (Render DB) so pasted SMS appears even without Firebase
-            const transRes = await firestoreService.getTransactions(userId, 500);
+            // Define timeouts for each operation or use a global timeout
+            const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+                const timeoutPromise = new Promise<never>((_, reject) => 
+                    setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs)
+                );
+                return Promise.race([promise, timeoutPromise]);
+            };
+
+            // 1. Fetch from Firestore and merge with backend API (Render DB)
+            console.log("📥 Fetching transactions...");
+            const transRes = await withTimeout(firestoreService.getTransactions(userId, 500), 10000, "Firestore Transactions")
+                .catch(err => {
+                    console.error("❌ Firestore Transactions error:", err);
+                    return { success: false, data: [] };
+                });
+
             const fromFirestore = transRes.success ? transRes.data : [];
-            const fromApi = await fetchTransactionsFromApi();
+            const fromApi = await withTimeout(fetchTransactionsFromApi(), 10000, "Backend API Transactions")
+                .catch(err => {
+                    console.error("❌ Backend API Transactions error:", err);
+                    return [];
+                });
+
             const allFetchedTransactions = mergeTransactionLists(fromFirestore, fromApi);
+            console.log(`✅ Fetched ${allFetchedTransactions.length} transactions in total.`);
             
             // For the transaction list, we only show the latest 10
             setTransactions(allFetchedTransactions.slice(0, 10));
@@ -132,7 +159,6 @@ export default function DashboardPage() {
             const pending = allFetchedTransactions.find((t: any) => t.status === 'pending');
             if (pending) {
                 setPendingTransaction(pending);
-                // Get AI suggestions for this transaction
                 getAiSuggestions(pending);
             } else {
                 setPendingTransaction(null);
@@ -141,49 +167,41 @@ export default function DashboardPage() {
             }
 
             // 2. Fetch Categories from Firestore
-            console.log("=== Fetching Categories ===");
-            const catRes = await firestoreService.getCategories(userId);
-            console.log("Categories API response:", catRes);
-            const fetchedCategories = catRes.success ? catRes.data : [];
-            console.log("Fetched categories:", fetchedCategories);
-            console.log("Setting categories state to:", fetchedCategories);
-            setCategories(fetchedCategories);
-            console.log("=== Categories Fetch Complete ===");
+            console.log("📥 Fetching categories...");
+            const catRes = await withTimeout(firestoreService.getCategories(userId), 10000, "Firestore Categories")
+                .catch(err => {
+                    console.error("❌ Firestore Categories error:", err);
+                    return { success: false, data: [] };
+                });
 
-            // 3. Calculate Summary Locally from ALL fetched transactions for accuracy
+            const fetchedCategories = catRes.success ? catRes.data : [];
+            setCategories(fetchedCategories);
+            console.log(`✅ Fetched ${fetchedCategories.length} categories.`);
+
+            // 3. Calculate Summary Locally
+            console.log("📊 Calculating summary...");
             const totalSpent = allFetchedTransactions
                 .filter((t: any) => t.type === 'debit')
-                .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+                .reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0);
             
             const categorySummary: Record<string, number> = {};
             const dailyBreakdown: Record<string, number> = {};
             
             allFetchedTransactions.forEach((t: any) => {
                 if (t.category && t.type === 'debit') {
-                    categorySummary[t.category] = (categorySummary[t.category] || 0) + (t.amount || 0);
+                    categorySummary[t.category] = (categorySummary[t.category] || 0) + (Number(t.amount) || 0);
                 }
                 
-                // Calculate daily breakdown from actual transactions
                 if (t.type === 'debit' && (t.date || t.createdAt || t.timestamp)) {
-                    // Handle different date formats (date, createdAt, timestamp)
                     let transactionDate: Date;
-                    if (t.date) {
-                        transactionDate = new Date(t.date);
-                    } else if (t.createdAt) {
-                        transactionDate = new Date(t.createdAt);
-                    } else if (t.timestamp) {
-                        transactionDate = new Date(t.timestamp);
-                    } else {
-                        return; // Skip if no date available
-                    }
+                    if (t.date) transactionDate = new Date(t.date);
+                    else if (t.createdAt) transactionDate = new Date(t.createdAt);
+                    else if (t.timestamp) transactionDate = new Date(t.timestamp);
+                    else return;
                     
-                    // Check if date is valid
-                    if (isNaN(transactionDate.getTime())) {
-                        console.warn("Invalid date for transaction:", t);
-                        return;
-                    }
+                    if (isNaN(transactionDate.getTime())) return;
                     
-                    const date = transactionDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+                    const date = transactionDate.toISOString().split('T')[0];
                     const amount = parseFloat(t.amount) || 0;
                     if (amount > 0) {
                         dailyBreakdown[date] = (dailyBreakdown[date] || 0) + amount;
@@ -191,16 +209,9 @@ export default function DashboardPage() {
                 }
             });
 
-            // Convert daily breakdown to array format for charts
             const dailyBreakdownArray = Object.entries(dailyBreakdown)
                 .map(([date, total]) => ({ date, total }))
                 .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-            // Debug logging
-            console.log("Daily breakdown calculated:", dailyBreakdownArray);
-            console.log("Category summary:", categorySummary);
-            console.log("Total transactions:", allFetchedTransactions.length);
-            console.log("Debit transactions:", allFetchedTransactions.filter(t => t.type === 'debit').length);
 
             const sortedCategories = Object.entries(categorySummary).sort((a: any, b: any) => b[1] - a[1]);
             const highestCat = sortedCategories.length > 0 ? sortedCategories[0][0] : "N/A";
@@ -217,19 +228,19 @@ export default function DashboardPage() {
 
             // Sync Cache
             cacheService.saveSummary(newSummary, userId);
-            // We only save to local transaction cache if we are NOT forcing a cloud refresh
             if (!force) {
                 transactionService.saveMany(allFetchedTransactions, userId);
             }
+            console.log("✨ Dashboard: Sync complete.");
 
         } catch (error: any) {
-            console.error("Connectivity issue or empty account:", error);
+            console.error("❌ Dashboard sync failed:", error);
             
-            // Fallback to cache
             const cachedSummary = cacheService.getSummary(userId);
             const cachedTransactions = transactionService.getAll(userId).slice(0, 10);
 
             if (cachedSummary) {
+                console.log("📦 Using cached summary fallback.");
                 setSummary(cachedSummary);
                 setTransactions(cachedTransactions);
             }
@@ -237,7 +248,6 @@ export default function DashboardPage() {
             setLoading(false);
         }
     }, [syncPendingTransactions]);
-
 
     useEffect(() => {
         fetchData();
@@ -248,14 +258,12 @@ export default function DashboardPage() {
 
     const handleCategoryAdded = useCallback(() => {
         console.log("=== handleCategoryAdded Called ===");
-        console.log("Current categories before refresh:", categories);
-        console.log("Calling fetchData(true) to refresh categories...");
         
         // Small delay to allow Firestore to propagate the write before we fetch
         setTimeout(() => {
             fetchData(true);
         }, 500);
-    }, [fetchData, categories]);
+    }, [fetchData]);
 
     const handleTransactionAdded = useCallback(() => {
         // Small delay to allow Firestore to propagate the write before we fetch
