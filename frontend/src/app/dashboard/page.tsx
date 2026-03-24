@@ -136,21 +136,24 @@ export default function DashboardPage() {
 
             // 1. Fetch from Firestore and merge with backend API (Render DB)
             console.log("📥 Fetching transactions...");
-            const transRes = await withTimeout(firestoreService.getTransactions(userId, 500), 10000, "Firestore Transactions")
+            const transRes = await withTimeout(firestoreService.getTransactions(userId, 500), 15000, "Firestore Transactions")
                 .catch(err => {
                     console.error("❌ Firestore Transactions error:", err);
                     return { success: false, data: [] };
                 });
 
             const fromFirestore = transRes.success ? transRes.data : [];
-            const fromApi = await withTimeout(fetchTransactionsFromApi(), 10000, "Backend API Transactions")
+            const fromApi = await withTimeout(fetchTransactionsFromApi(), 30000, "Backend API Transactions")
                 .catch(err => {
                     console.error("❌ Backend API Transactions error:", err);
                     return [];
                 });
+            
+            // NEW: Fetch from Local Storage for "Offline" support
+            const fromLocal = transactionService.getAll(userId);
 
-            const allFetchedTransactions = mergeTransactionLists(fromFirestore, fromApi);
-            console.log(`✅ Fetched ${allFetchedTransactions.length} transactions in total.`);
+            const allFetchedTransactions = mergeTransactionLists(fromFirestore, fromApi, fromLocal);
+            console.log(`✅ Fetched ${allFetchedTransactions.length} transactions (FS: ${fromFirestore.length}, API: ${fromApi.length}, Local: ${fromLocal.length})`);
             
             // For the transaction list, we only show the latest 10
             setTransactions(allFetchedTransactions.slice(0, 10));

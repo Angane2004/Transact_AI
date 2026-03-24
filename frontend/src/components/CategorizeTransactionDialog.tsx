@@ -87,7 +87,7 @@ export function CategorizeTransactionDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="w-[95vw] max-w-[500px] sm:w-full">
                 <DialogHeader>
                     <DialogTitle>Categorize Transaction</DialogTitle>
                     <DialogDescription>
@@ -97,7 +97,7 @@ export function CategorizeTransactionDialog({
                 <div className="space-y-4 py-4">
                     <div className="space-y-2">
                         <Label>Select Category</Label>
-                        <div className="flex gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row">
                             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                                 <SelectTrigger className="flex-1">
                                     <SelectValue placeholder="Choose a category" />
@@ -114,6 +114,7 @@ export function CategorizeTransactionDialog({
                                 type="button"
                                 variant="outline"
                                 onClick={() => setShowAddCategory(!showAddCategory)}
+                                className="w-full sm:w-auto"
                             >
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add New
@@ -132,7 +133,7 @@ export function CategorizeTransactionDialog({
                                 <Sparkles className="h-4 w-4 text-yellow-500" />
                                 New Category Name
                             </Label>
-                            <div className="flex gap-2">
+                            <div className="flex flex-col gap-2 sm:flex-row">
                                 <Input
                                     value={newCategory}
                                     onChange={(e) => setNewCategory(e.target.value)}
@@ -144,18 +145,18 @@ export function CategorizeTransactionDialog({
                                         }
                                     }}
                                 />
-                                <Button type="button" onClick={handleAddCategory}>
+                                <Button type="button" onClick={handleAddCategory} className="w-full sm:w-auto">
                                     Add
                                 </Button>
                             </div>
                         </motion.div>
                     )}
                 </div>
-                <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
                         Cancel
                     </Button>
-                    <Button type="button" onClick={handleCategorize} disabled={!selectedCategory}>
+                    <Button type="button" onClick={handleCategorize} disabled={!selectedCategory} className="w-full sm:w-auto">
                         Categorize
                     </Button>
                 </DialogFooter>

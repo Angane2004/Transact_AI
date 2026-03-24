@@ -38,7 +38,9 @@ default_origins = [
     "http://localhost:3001",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
-    "https://trancatai.netlify.app",
+    "https://transactai.netlify.app",
+    "https://transact-ai.netlify.app",
+    "https://ai-transaction-categorization.netlify.app",
 ]
 
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
@@ -356,9 +358,18 @@ class ParseSmsRequest(BaseModel):
 def parse_sms(request: ParseSmsRequest):
     if not request.message:
         raise HTTPException(status_code=400, detail="Missing message")
-    # Uses Gemini when GEMINI_API_KEY is set; otherwise regex + extract_amount/extract_recipient
-    result = parser_agent.parse(request.message)
-    return {"status": "success", "parsed": result.model_dump()}
+    
+    print(f"🔍 [Backend] Received /parse-sms request: {request.message[:50]}...")
+    try:
+        # Uses Gemini when GEMINI_API_KEY is set; otherwise regex + extract_amount/extract_recipient
+        result = parser_agent.parse(request.message)
+        print(f"✅ [Backend] Successfully parsed: {result.merchant} | {result.amount}")
+        return {"status": "success", "parsed": result.model_dump()}
+    except Exception as e:
+        print(f"❌ [Backend] CRITICAL ERROR in /parse-sms: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal Parsing Error: {str(e)}")
 
 @app.get("/anomalies")
 def get_anomalies(db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):

@@ -35,14 +35,27 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
 
     setLoading(true);
     try {
-      const response = await api.post("/parse-sms", { message: smsText });
+      const response = await api.post("/parse-sms", { message: smsText }, { timeout: 120000 });
       setParsedData(response.data.parsed);
       toast.success("AI parsed the SMS successfully!");
     } catch (error: any) {
-      console.error(error);
+      const diagnosticError = {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        data: error.response?.data,
+        config: {
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+        }
+      };
+      console.log("PasteSmsDialog /parse-sms Error (Diagnostic):", JSON.stringify(diagnosticError, null, 2));
+
       let detail = "Failed to parse SMS. Please check your network.";
       if (error.response?.data?.detail) {
         detail = error.response.data.detail;
+      } else if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        detail = "Parse timed out. The server might be waking up. Please try again.";
       }
       toast.error(detail);
     } finally {
@@ -121,8 +134,19 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
           setOpen(false); 
         }
       }
-    } catch (error) {
-      console.error("Failed to save to cloud, falling back to local:", error);
+    } catch (error: any) {
+      // Diagnostic logging for network/CORS issues
+      const diagnosticError = {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        data: error.response?.data,
+        config: {
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+        }
+      };
+      console.log("PasteSmsDialog /classify Error (Diagnostic):", JSON.stringify(diagnosticError, null, 2));
 
       // Offline saving fallback
       if (parsedData) {
@@ -138,11 +162,19 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
         };
 
         transactionService.save(offlineTxn, userId);
-        toast.info("Saved locally (offline mode). It will sync when cloud is back.");
+        
+        let msg = "Saved locally (offline mode). The server might be waking up; it will sync later.";
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          msg = "Backend is cold-starting (taking too long). Saved locally for now!";
+        } else if (error.message === 'Network Error') {
+          msg = "Connectivity issue. Saved locally for now!";
+        }
+        
+        toast.info(msg);
         onTransactionAdded();
         handleClose();
       } else {
-        toast.error("Failed to save transaction. Try again later.");
+        toast.error("Failed to save transaction. Please check your network or try again in 1 minute.");
       }
     } finally {
       setLoading(false);
@@ -202,9 +234,21 @@ export function PasteSmsDialog({ onTransactionAdded }: PasteSmsDialogProps) {
       onTransactionAdded();
       handleClose();
       setPendingTxnData(null);
-    } catch (error) {
-      console.error("Failed to finalize categorization:", error);
-      toast.error("Failed to save transaction.");
+    } catch (error: any) {
+      const diagnosticError = {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        data: error.response?.data,
+      };
+      console.log("PasteSmsDialog Finalize Error (Diagnostic):", JSON.stringify(diagnosticError, null, 2));
+      
+      let errorMsg = "Failed to finalize categorization. Please check your connection.";
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        errorMsg = "Finalize timed out. Please try again in 30 seconds.";
+      }
+      
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }

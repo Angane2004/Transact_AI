@@ -7,7 +7,7 @@ export const api = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    timeout: 60000, // 60 second timeout for LLM processing
+    timeout: 120000, // 120 second timeout for LLM/Render cold starts
 });
 
 // Request interceptor to add User ID

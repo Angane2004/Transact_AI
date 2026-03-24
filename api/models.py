@@ -47,6 +47,9 @@ class Transaction(Base):
     # Credit or Debit
     type = Column(String(10), default="debit")
 
+    # Transaction status
+    status = Column(String(20), default="completed")
+
     # AI Agents Data
     is_anomaly = Column(Boolean, default=False)
     anomaly_reason = Column(String(500), nullable=True)
